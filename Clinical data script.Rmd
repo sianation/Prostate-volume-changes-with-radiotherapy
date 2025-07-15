@@ -1,0 +1,1668 @@
+---
+title: "Swelling clinical data completeness"
+output: html_document
+date: "2025-05-22"
+---
+
+```{r setup, include=FALSE}
+
+
+rm(list=ls(all=TRUE))
+
+library(tidyverse)
+library(gridExtra)
+library(forcats)
+library(ggpubr)
+library(forcats)
+library(lubridate)
+library(dplyr)
+library(scales)
+library(tidycmprsk)
+library(gtsummary)
+library(shiny)
+library(reporter)
+library(officer)
+library(flextable)
+library(ggplot2)
+library(knitr)
+library(rmarkdown)
+library(patchwork)
+library(kableExtra)
+library(stats)
+library(readxl)
+
+
+
+
+```
+
+
+```{r}
+### import and convert excel ########
+# Set working directory
+setwd("C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Clinical data from Erwin/Clinical Data R")
+
+# Import the new CSV file (no truncation or dud column removal)
+csv_path <- "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Clinical data from Erwin/3rd try/FileSenderDownload_6-5-2025__9-33-16/2024_011_RMH_Cooper_VolumeDimensionChangesProstate.csv"
+df_clin <- readr::read_csv(csv_path)
+
+###load volume technical data ####
+excel_path <- "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Excels/Mastersheet 1.5.25.xlsx"
+
+# Read the Excel file into a dataframe, ###this needs to be loaded from the VOlume script to work ####
+df_truncated <- readxl::read_excel(excel_path)
+
+
+  
+  
+  
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Remove patients from clinical dataset that don't appear in technical dataset
+patient_ids <- df_truncated$`Patient Id`
+
+# Remove leading zeros from both patient_ids and df_clin$record_id
+clean_patient_ids <- sub('^0+', '', patient_ids)
+clean_record_ids <- sub('^0+', '', as.character(df_clin$record_id))
+
+# Filter df_clin to keep only rows where the cleaned record_id matches a cleaned Patient Id
+df_filtered <- df_clin[clean_record_ids %in% clean_patient_ids, ]
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+#######
+# Print each column name on a new line
+cat(colnames(df_filtered), sep = "\n")
+
+
+```
+
+```{r eval=FALSE, include=FALSE}
+
+####remove dud columns ##########
+
+# Remove specified columns from df_filtered
+
+df_filtered_reduced <- df_filtered[, !names(df_filtered) %in% c(
+  "IC_YN",
+  "IC_SUBCAT1_ELEKTA",
+  "IC_SUBCAT2_EXTRAMRI",
+  "IC_SUBCAT3_QOL",
+  "IC_SUBCAT4_TWICS",
+  "IC_SUBCAT5_REQUEST_MEDICAL_DATA",
+  "SEX",
+  "TSG",
+  "TSG_OTHER",
+  "PRIMARY_TUMOR_YN",
+  "NON_PRIMARY_TUMOR_TYPE",
+  "NON_PRIMARY_TUMOR_TYPE_LOCATION_YN",
+  "NON_PRIMARY_TUMOR_TYPE_LOCATION",
+  "STUDY_SCENARIO",
+  "MOMENTUM_FIRST_ENROLL_YN",
+  "MOMENTUM_SUBJECTID_PREVIOUS",
+  "PLANNED_END_DATE_YN",
+  "BASE_RADITIONTHERAPY_INTENT",
+  "BASE_INDEX_TUMOR_DATE",
+  "BASE_C61_TUMOR_LOCATION",
+  "BASE_C61_TUMOR_LOCATION_TXT",
+  "BASE_C61_TUMOR_HIST",
+  "BASE_C61_TUMOR_HIST_TXT",
+  "BASE_PATH_TNM_YN",
+  "BASE_CLIN_TNM_YN",
+  "BASE_C61_PATH_T",
+  "BASE_C61_PATH_N",
+  "BASE_C61_PATH_M",
+  "BASE_PRO_YN",
+  "BASE_EQ5D5L_YN",
+  "BASE_PRO_IMPORTED_YN",
+  "ASSOSTUDY_INTERVENT_MRL_CONSORTIUM_1_STUDY_TXT",
+  "ASSOSTUDY_INTERVENT_MRL_CONSORTIUM_1_INCLUSION_DATE",
+  "ASSOSTUDY_INTERVENT_MRL_CONSORTIUM_1_PI_TXT",
+  "ASSOSTUDY_INTERVENT_MRL_NON_CONSORTIUM_1_STUDY_TXT",
+  "ASSOSTUDY_INTERVENT_MRL_NON_CONSORTIUM_1_INCLUSION_DATE",
+  "ASSOSTUDY_INTERVENT_MRL_NON_CONSORTIUM_1_PI_TXT",
+  "ASSOSTUDY_INTERVENT_NON_MRL_1_STUDY_TXT",
+  "ASSOSTUDY_INTERVENT_NON_MRL_1_INCLUSION_DATE",
+  "ASSOSTUDY_INTERVENT_NON_MRL_1_PI_TXT",
+  "PRE_TUMOR_STAGE_CHANGED_YN",
+  "PRE_TUMOR_STAGE_DATE",
+  "PRE_PATH_TNM_YN",
+  "PRE_CLIN_TNM_YN",
+  "PRE_C61_CLIN_T",
+  "PRE_C61_CLIN_N",
+  "PRE_C61_CLIN_M",
+  "PRE_C61_PATH_T",
+  "PRE_C61_PATH_N",
+  "PRE_C61_PATH_M",
+  "PRE_C67_UNIFOCAL_YN",
+  "PRE_C67_MUSCLE_INVASION_YN",
+  "PRE_C67_HYDRONEPHROSIS_YN",
+  "PRE_C67_HYDRONEPHROSIS_TYPE",
+  "PRE_C67_TURB_YN",
+  "PRE_C67_TURB_DATE",
+  "PRE_C67_TURB_TYPE",
+  "PRE_C67_TURB_TYPE_TXT",
+  "PRE_C67_NON_MUSCLE_INVASION_YN",
+  "PRE_C67_CIS_YN",
+  "PRE_C67_POSITION_YN",
+  "PRE_C50_ERPR_STATUS_YN",
+  "PRE_C50_ERPR_STATUS_DATE",
+  "PRE_C50_ER_POS_PERCENT",
+  "PRE_C50_PR_POS_PERCENT",
+  "PRE_C50_HER2NEU_STATUS_YN",
+  "PRE_C50_HER2NEU_DATE",
+  "PRE_C50_HER2NEU",
+  "PRE_C50_MAMMAPRINT_YN",
+  "PRE_C50_MAMMAPRINT_DATE",
+  "PRE_C50_MAMMAPRINT",
+  "PRE_C50_ONCOTYPEDX_YN",
+  "PRE_C50_ONCOTYPEDX_DATE",
+  "PRE_C50_ONCOTYPEDX",
+  "PRE_C25_RESECTABILITY_STATUS_YN",
+  "PRE_C25_RESECTABILITY_STATUS_DATE",
+  "PRE_C25_RESECTABILITY_STATUS",
+  "PRE_C25_TUMOR_ADC_YN",
+  "PRE_C25_TUMOR_ADC_DATE",
+  "PRE_C25_TUMOR_ADC",
+  "PRE_C25_CA199_YN",
+  "PRE_C25_CA199_DATE",
+  "PRE_C25_CA199",
+  "PRE_C25_BILI_YN",
+  "PRE_C25_BILI_DATE",
+  "PRE_C25_BILIARY_STENT_YN",
+  "PRE_C25_BILI_UNITS",
+  "PRE_C25_BILI_MG",
+  "PRE_C25_BILI_UMOL",
+  "PRE_C20_TREATMENT_INTENT",
+  "PRE_C20_TREATMENT_INTENT_TXT",
+  "PRE_C20_CRM_YN",
+  "PRE_C20_CRM_DATE",
+  "PRE_C20_CRM",
+  "PRE_C20_MRI_TN_STAGE_YN",
+  "PRE_C20_MRI_TN_STAGE_DATE",
+  "PRE_C20_MRI_T_STAGE",
+  "PRE_C20_MRI_N_STAGE",
+  "TREAT_RT_PHASE_1_PRIM_TREAT_VOL",
+  "TREAT_RT_PHASE_1_PRIM_TREAT_VOL_NUMBER",
+  "TREAT_RT_PHASE_1_DRAINING_LYMPH_NODES",
+  "TREAT_RT_PHASE_1_TREAT_MODALITY",
+  "TREAT_RT_PHASE_1_EXT_BEAM_PLAN_TECHNIQUE",
+  "TREAT_RT_PHASE_3_ADAPTATION_TECHNIQUE",
+  "TREAT_RT_COURSE_START_DATE",
+  "TREAT_RT_COURSE_END_DATE",
+  "TREAT_RT_PHASE_2_START_DATE",
+  "TREAT_RT_PHASE_2_END_DATE",
+  "TREAT_RT_PHASE_2_PRIM_TREAT_VOL",
+  "TREAT_RT_PHASE_2_PRIM_TREAT_VOL_NUMBER",
+  "TREAT_RT_PHASE_2_DRAINING_LYMPH_NODES",
+  "TREAT_RT_PHASE_2_TREAT_MODALITY",
+  "TREAT_RT_PHASE_2_EXT_BEAM_PLAN_TECHNIQUE",
+  "TREAT_RT_PHASE_2_TOTAL_FRACTIONS_COUNT",
+  "TREAT_RT_PHASE_2_TOTAL_DOSE",
+  "TREAT_RT_PHASE_2_ADAPTATION_TECHNIQUE",
+  "TREAT_RT_PHASE_2_ATS_ATP_RATIO",
+  "TREAT_RT_PHASE_3_START_DATE",
+  "TREAT_RT_PHASE_3_END_DATE",
+  "TREAT_RT_PHASE_3_PRIM_TREAT_VOL",
+  "TREAT_RT_PHASE_3_PRIM_TREAT_VOL_NUMBER",
+  "TREAT_RT_PHASE_3_DRAINING_LYMPH_NODES",
+  "TREAT_RT_PHASE_3_TREAT_MODALITY",
+  "TREAT_RT_PHASE_3_EXT_BEAM_PLAN_TECHNIQUE",
+  "TREAT_RT_PHASE_3_TOTAL_FRACTIONS_COUNT",
+  "TREAT_RT_PHASE_3_TOTAL_DOSE",
+  "TREAT_RT_PHASE_3_ADAPTATION_TECHNIQUE",
+  "TREAT_RT_NOT_COMPLETED_TXT",
+  "TREAT_MRL_COMPLETED_YN",
+  "TREAT_MRL_FRACTION_YN",
+  "TREAT_MRL_NOT_COMPLETED",
+  "TREAT_MRL_NOT_COMPLETED_DESPITE_PLAN",
+  "TREAT_MRL_NOT_COMPLETED_DESPITE_PLAN_NO_PATIENT_SUPPORT_TXT",
+  "TREAT_MRL_NOT_COMPLETED_DESPITE_PLAN_OTHER_TXT",
+  "TREAT_MRL_NOT_COMPLETED_OTHER_TXT",
+  "TREAT_OTHER_TREATMENT_YN",
+  "TREAT_OTHER_SURG_YN",
+  "TREAT_OTHER_SURG_DATE",
+  "TREAT_OTHER_SURG_RES_CLASSIFICATION",
+  "TREAT_OTHER_SURG_RES_MARG_STATUS",
+  "TREAT_OTHER_RADIATION_YN",
+  "TREAT_OTHER_RADIATION_DATE",
+  "TREAT_OTHER_CHEMO_YN",
+  "TREAT_OTHER_CHEMO_START_DATE",
+  "TREAT_OTHER_CHEMO_END_DATE",
+  "TREAT_OTHER_CHEMO_DURING_MRL_YN",
+  "TREAT_OTHER_CHEMO_AGENT_TXT",
+  "TREAT_OTHER_IMMUNO_YN",
+  "TREAT_OTHER_IMMUNO_START_DATE",
+  "TREAT_OTHER_IMMUNO_END_DATE",
+  "TREAT_OTHER_IMMUNO_DURING_MRL_YN",
+  "TREAT_OTHER_IMMUNO_AGENT_TXT",
+  "TREAT_OTHER_ADDITIONAL_YN",
+  "TREAT_OTHER_ADDITIONAL_1_CATEGORY",
+  "TREAT_OTHER_ADDITIONAL_1_START_DATE",
+  "TREAT_OTHER_ADDITIONAL_1_END_DATE",
+  "TREAT_OTHER_ADDITIONAL_1_DURING_MRL_YN",
+  "TREAT_OTHER_ADDITIONAL_1_NAME_TXT",
+  "TREAT_OTHER_ADDITIONAL_2_CATEGORY",
+  "TREAT_OTHER_ADDITIONAL_2_START_DATE",
+  "TREAT_OTHER_ADDITIONAL_2_END_DATE",
+  "TREAT_OTHER_ADDITIONAL_2_DURING_MRL_YN",
+  "TREAT_OTHER_ADDITIONAL_2_NAME_TXT",
+  "TREAT_OTHER_ADDITIONAL_3_CATEGORY",
+  "TREAT_OTHER_ADDITIONAL_3_START_DATE",
+  "TREAT_OTHER_ADDITIONAL_3_END_DATE",
+  "TREAT_OTHER_ADDITIONAL_3_DURING_MRL_YN",
+  "TREAT_OTHER_ADDITIONAL_3_NAME_TXT",
+  "TREAT_GYN_EQD2_YN",
+  "TREAT_GYN_EQD2",
+  "FU3M_CTCAE_TOX_NO_TXT",
+
+
+  "FU3M_CTCAE_19245_GRADE345_RT_ATTRIBUTION",
+ 
+
+  "FU3M_CTCAE_05886_GRADE345_RT_ATTRIBUTION",
+  
+ 
+  "FU3M_CTCAE_00081_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_05265_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_10774_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_12727_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_13781_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_13950_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_15388_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_15461_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_16296_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_17853_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_18043_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_25476_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_28130_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_28813_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_33645_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_38064_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_63190_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_38072_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_47700_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_50068_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_16256_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_54482_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_61103_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_05364_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_62646_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_47900_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_02646_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_65798_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_09845_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_12373_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_19211_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_63057_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_19450_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_46628_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_46539_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_46543_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_62225_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_46555_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_46593_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_06179_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU3M_CTCAE_06298_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_61461_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_46901_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_65817_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_11224_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_13963_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_20201_GRADE345_RT_ATTRIBUTION",
+
+  "FU3M_CTCAE_47681_GRADE345_RT_ATTRIBUTION",
+  "FU3M_CTCAE_TOX_OTHER_GRADE345_YN",
+  "FU3M_CTCAE_TOX_OTHER_GRADE345_1_CTCAE",
+  "FU3M_CTCAE_TOX_OTHER_GRADE345_1_GRADE",
+  "FU3M_CTCAE_TOX_OTHER_GRADE345_1_DATE",
+  "FU3M_CTCAE_TOX_OTHER_GRADE345_1_RT_ATTRIBUTION",
+  "FU3M_C67_LOCAL_RECURRENCE_YN",
+  "FU3M_C67_CLIN_T_STAGE_YN",
+  "FU3M_C67_CLIN_T_STAGE",
+  "FU3M_C67_GRADE_YN",
+  "FU3M_C67_GRADE",
+  "FU3M_C67_CYSTECTOMY_YN",
+  "FU3M_C67_CYSTECTOMY_DATE",
+  "FU3M_C67_CYSTECTOMY_REASON",
+  "FU3M_C67_CYSTECTOMY_REASON_TXT",
+  "FU3M_C15_TUMOR_RESECTED_YN",
+  "FU3M_C15_TUMOR_RESECTED_DATE",
+  "FU3M_C15_SURG_TYPE",
+  "FU3M_C15_SURG_TYPE_TXT",
+  "FU3M_C15_SURG_TYPE_IVORLEWIS",
+  "FU3M_C15_SURG_TYPE_MCKEOWN",
+  "FU3M_C15_SURG_TYPE_TRANSHIATAL",
+  "FU3M_C15_MANDARD_GRADE_YN",
+  "FU3M_C15_MANDARD_GRADE",
+  "FU3M_C15_RES_MARG_STATUS_YN",
+  "FU3M_C15_RES_MARG_STATUS",
+  "FU3M_C15_RES_MARG_STATUS_R1_POS",
+  "FU3M_C15_RES_MARG_STATUS_R2_POS",
+  "FU3M_C22_AFP_YN",
+  "FU3M_C22_AFP_DATE",
+  "FU3M_C22_AFP",
+  "FU3M_C22_CA199_YN",
+  "FU3M_C22_CA199_DATE",
+  "FU3M_C22_CA199",
+  "FU3M_C22_BILI_YN",
+  "FU3M_C22_BILI_DATE",
+  "FU3M_C22_BILI_UNITS",
+  "FU3M_C22_BILI_MG",
+  "FU3M_C22_BILI_UMOL",
+  "FU3M_C22_PLATELET_COUNT_YN",
+  "FU3M_C22_PLATELET_COUNT_DATE",
+  "FU3M_C22_PLATELET_COUNT",
+  "FU3M_C22_CHILD_PUGH_YN",
+  "FU3M_C22_CHILD_PUGH_DATE",
+  "FU3M_C22_CHILD_PUGH",
+  "FU3M_C25_RESECTABILITY_STATUS_YN",
+  "FU3M_C25_RESECTABILITY_STATUS_DATE",
+  "FU3M_C25_RESECTABILITY_STATUS",
+  "FU3M_C25_CA199_YN",
+  "FU3M_C25_CA199_DATE",
+  "FU3M_C25_CA199",
+  "FU3M_C25_BILI_YN",
+  "FU3M_C25_BILI_DATE",
+  "FU3M_C25_BILIARY_STENT_YN",
+  "FU3M_C25_BILI_UNITS",
+  "FU3M_C25_BILI_MG",
+  "FU3M_C25_BILI_UMOL",
+  "FU3M_C61_PSA_YN",
+  "FU3M_C61_PSA_DATE",
+  "FU3M_C61_PSA",
+  "FU3M_C20_TREATMENT_INTENT",
+  "FU3M_C20_TREATMENT_INTENT_TXT",
+  "FU3M_C20_CRM_YN",
+  "FU3M_C20_CRM_DATE",
+  "FU3M_C20_CRM",
+  "FU3M_C20_MRI_TN_STAGE_YN",
+  "FU3M_C20_MRI_TN_STAGE_DATE",
+  "FU3M_C20_MRI_T_STAGE",
+  "FU3M_C20_MRI_N_STAGE",
+  "FU3M_C20_TUMOR_RESECTED_YN",
+  "FU3M_C20_TUMOR_RESECTED_DATE",
+  "FU3M_C20_TYPE_SURG",
+  "FU3M_C20_TYPE_SURG_TXT",
+  "FU3M_C20_PA_CRM_YN",
+  "FU3M_C20_PA_CRM_STATUS",
+  "FU6M_CTCAE_TOX_YES",
+  "FU6M_CTCAE_TOX_NO",
+  "FU6M_CTCAE_TOX_NO_TXT",
+  "FU6M_CTCAE_19245",
+  "FU6M_CTCAE_19245_DATE",
+  "FU6M_CTCAE_19245_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_05886",
+  "FU6M_CTCAE_05886_DATE",
+  "FU6M_CTCAE_05886_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU6M_CTCAE_00081_GRADE345_RT_ATTRIBUTION",
+
+  "FU6M_CTCAE_05265_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_10774_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_12727_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_13781",
+  "FU6M_CTCAE_13781_DATE",
+  "FU6M_CTCAE_13781_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_13950",
+  "FU6M_CTCAE_13950_DATE",
+  "FU6M_CTCAE_13950_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_15388",
+  "FU6M_CTCAE_15388_DATE",
+  "FU6M_CTCAE_15388_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_15461",
+  "FU6M_CTCAE_15461_DATE",
+  "FU6M_CTCAE_15461_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_16296_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_17853",
+  "FU6M_CTCAE_17853_DATE",
+  "FU6M_CTCAE_17853_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_18043",
+  "FU6M_CTCAE_18043_DATE",
+  "FU6M_CTCAE_18043_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_25476",
+  "FU6M_CTCAE_25476_DATE",
+  "FU6M_CTCAE_25476_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_28130",
+  "FU6M_CTCAE_28130_DATE",
+  "FU6M_CTCAE_28130_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_28813_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_33645",
+  "FU6M_CTCAE_33645_DATE",
+  "FU6M_CTCAE_33645_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_38064_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU6M_CTCAE_63190_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_38072_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_47700_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_50068",
+  "FU6M_CTCAE_50068_DATE",
+  "FU6M_CTCAE_50068_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_16256_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_54482",
+  "FU6M_CTCAE_54482_DATE",
+  "FU6M_CTCAE_54482_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_61103_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_05364",
+  "FU6M_CTCAE_05364_DATE",
+  "FU6M_CTCAE_05364_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_62646",
+  "FU6M_CTCAE_62646_DATE",
+  "FU6M_CTCAE_62646_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_47900",
+  "FU6M_CTCAE_47900_DATE",
+  "FU6M_CTCAE_47900_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_02646",
+  "FU6M_CTCAE_02646_DATE",
+  "FU6M_CTCAE_02646_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_65798_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_09845",
+  "FU6M_CTCAE_09845_DATE",
+  "FU6M_CTCAE_09845_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_12373",
+  "FU6M_CTCAE_12373_DATE",
+  "FU6M_CTCAE_12373_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_19211",
+  "FU6M_CTCAE_19211_DATE",
+  "FU6M_CTCAE_19211_GRADE345_RT_ATTRIBUTION",
+ 
+  "FU6M_CTCAE_63057_GRADE345_RT_ATTRIBUTION",
+
+  "FU6M_CTCAE_19450_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_46628_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_46539_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_46543_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_62225_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_46555_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_46593_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_06179_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_06298_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_61461_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_46901_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_65817_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_11224_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_13963_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_20201_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_47681_GRADE345_RT_ATTRIBUTION",
+  "FU6M_CTCAE_TOX_OTHER_GRADE345_YN",
+  "FU6M_CTCAE_TOX_OTHER_GRADE345_1_CTCAE",
+  "FU6M_CTCAE_TOX_OTHER_GRADE345_1_GRADE",
+  "FU6M_CTCAE_TOX_OTHER_GRADE345_1_DATE",
+  "FU6M_CTCAE_TOX_OTHER_GRADE345_1_RT_ATTRIBUTION",
+  "FU6M_YPATH_TN_YN",
+  "FU6M_C61_YPATH_TN_T",
+  "FU6M_C61_YPATH_TN_N",
+  "FU6M_C67_LOCAL_RECURRENCE_YN",
+  "FU6M_C67_CLIN_T_STAGE_YN",
+  "FU6M_C67_CLIN_T_STAGE",
+  "FU6M_C67_GRADE_YN",
+  "FU6M_C67_GRADE",
+  "FU6M_C67_CYSTECTOMY_YN",
+  "FU6M_C67_CYSTECTOMY_DATE",
+  "FU6M_C67_CYSTECTOMY_REASON",
+  "FU6M_C67_CYSTECTOMY_REASON_TXT",
+  "FU6M_C15_TUMOR_RESECTED_YN",
+  "FU6M_C15_TUMOR_RESECTED_DATE",
+  "FU6M_C15_SURG_TYPE",
+  "FU6M_C15_SURG_TYPE_TXT",
+  "FU6M_C15_SURG_TYPE_IVORLEWIS",
+  "FU6M_C15_SURG_TYPE_MCKEOWN",
+  "FU6M_C15_SURG_TYPE_TRANSHIATAL",
+  "FU6M_C15_MANDARD_GRADE_YN",
+  "FU6M_C15_MANDARD_GRADE",
+  "FU6M_C15_RES_MARG_STATUS_YN",
+  "FU6M_C15_RES_MARG_STATUS",
+  "FU6M_C15_RES_MARG_STATUS_R1_POS",
+  "FU6M_C15_RES_MARG_STATUS_R2_POS",
+  "FU6M_C22_AFP_YN",
+  "FU6M_C22_AFP_DATE",
+  "FU6M_C22_AFP",
+  "FU6M_C22_CA199_YN",
+  "FU6M_C22_CA199_DATE",
+  "FU6M_C22_CA199",
+  "FU6M_C22_BILI_YN",
+  "FU6M_C22_BILI_DATE",
+  "FU6M_C22_BILI_UNITS",
+  "FU6M_C22_BILI_MG",
+  "FU6M_C22_BILI_UMOL",
+  "FU6M_C22_PLATELET_COUNT_YN",
+  "FU6M_C22_PLATELET_COUNT_DATE",
+  "FU6M_C22_PLATELET_COUNT",
+  "FU6M_C22_CHILD_PUGH_YN",
+  "FU6M_C22_CHILD_PUGH_DATE",
+  "FU6M_C22_CHILD_PUGH",
+  "FU6M_C25_RESECTABILITY_STATUS_YN",
+  "FU6M_C25_RESECTABILITY_STATUS_DATE",
+  "FU6M_C25_RESECTABILITY_STATUS",
+  "FU6M_C25_CA199_YN",
+  "FU6M_C25_CA199_DATE",
+  "FU6M_C25_CA199",
+  "FU6M_C25_BILI_YN",
+  "FU6M_C25_BILI_DATE",
+  "FU6M_C25_BILIARY_STENT_YN",
+  "FU6M_C25_BILI_UNITS",
+  "FU6M_C25_BILI_MG",
+  "FU6M_C25_BILI_UMOL",
+  "FU6M_C61_PSA_YN",
+  "FU6M_C20_TREATMENT_INTENT",
+  "FU6M_C20_TREATMENT_INTENT_TXT",
+  "FU6M_C20_CRM_YN",
+  "FU6M_C20_CRM_DATE",
+  "FU6M_C20_CRM",
+  "FU6M_C20_MRI_TN_STAGE_YN",
+  "FU6M_C20_MRI_TN_STAGE_DATE",
+  "FU6M_C20_MRI_T_STAGE",
+  "FU6M_C20_MRI_N_STAGE",
+  "FU6M_C20_TUMOR_RESECTED_YN",
+  "FU6M_C20_TUMOR_RESECTED_DATE",
+  "FU6M_C20_TYPE_SURG",
+  "FU6M_C20_TYPE_SURG_TXT",
+  "FU6M_C20_PA_CRM_YN",
+  "FU6M_C20_PA_CRM_STATUS",
+  "FU6M_PRO_IMPORTED_YN",
+  "EOS_REASON",
+  "EOS_REASON_INCORRECT_ENROLLMENT",
+  "EOS_REASON_MRL_NOT_COMPLETED",
+  "EOS_REASON_MRL_NOT_COMPLETED_TXT",
+  "EOS_REASON_OTHER_TXT"
+)]
+
+
+```
+
+```{r}
+
+
+## create separate dataframes for different outcomes to make data easier to handle ####
+
+
+```
+
+
+```{r}
+#######
+
+# Print each column name on a new line
+#cat(colnames(df_filtered_reduced), sep = "\n")
+```
+
+```{r eval=FALSE, include=FALSE}
+# create core columns to be included in each df eg ID, study site for identification purposes later on ######
+core_cols <- c(
+  "record_id", "institute_abbreviation", "STUDY_SITE", "IC_DATE", "YEAR_OF_BIRTH",
+  "PLANNED_END_DATE", "BASE_PRIMARY_TUMOR_DATE", "BASE_C61_CLIN_T", "BASE_C61_CLIN_N", "BASE_C61_CLIN_M",
+  "PRE_C61_GLEASON_SCORE_YN", "PRE_C61_GLEASON_SCORE_DATE", "PRE_C61_GLEASON_SCORE_PRIMARY",
+  "PRE_C61_GLEASON_SCORE_SECONDARY", "PRE_C61_GLEASON_SCORE_TOTAL", "PRE_C61_PSA_YN", "PRE_C61_PSA_DATE",
+  "PRE_C61_PSA", "TREAT_RT_PHASE_1_START_DATE", "TREAT_RT_PHASE_1_END_DATE", "TREAT_RT_PHASE_1_TOTAL_FRACTIONS_COUNT",
+  "TREAT_RT_PHASE_1_TOTAL_DOSE", "TREAT_RT_PHASE_1_ADAPTATION_TECHNIQUE", "TREAT_RT_PHASE_1_ATS_ATP_RATIO",
+  "TREAT_RT_REIRRADIATION_SITE_YN", "TREAT_RT_MRL_COMMENTS_TXT", "TREAT_RT_COMPLETED_YN",
+  "TREAT_OTHER_HORMONE_YN", "TREAT_OTHER_HORMONE_START_DATE", "TREAT_OTHER_HORMONE_END_DATE",
+  "TREAT_OTHER_HORMONE_DURING_MRL_YN", "TREAT_OTHER_HORMONE_AGENT_TXT", "EOS_END_DATE", "EOS_DEATH_DATE"
+)
+
+df_core <- df_filtered_reduced[, core_cols]
+```
+
+
+
+```{r eval=FALSE, include=FALSE}
+
+###### filter the outcomes into smaller dataframes #######
+
+eortc_cols <- grep("EORTC", names(df_filtered_reduced), value = TRUE)
+df_eortc <- df_filtered_reduced[, unique(c(core_cols, eortc_cols))]
+
+ctcae_cols <- grep("CTCAE", names(df_filtered_reduced), value = TRUE)
+df_ctcae <- df_filtered_reduced[, unique(c(core_cols, ctcae_cols))]
+
+eq5d5l_cols <- grep("EQ5D5L", names(df_filtered_reduced), value = TRUE)
+df_eq5d5l <- df_filtered_reduced[, unique(c(core_cols, eq5d5l_cols))]
+
+str(df_core)
+str(df_eortc)
+str(df_ctcae)
+str(df_eq5d5l)
+
+saveRDS(df_core, "df_core.rds")
+saveRDS(df_eortc, "df_eortc.rds")
+saveRDS(df_ctcae, "df_ctcae.rds")
+saveRDS(df_eq5d5l, "df_eq5d5l.rds")
+getwd()
+
+
+
+
+
+```
+
+
+
+```{r}
+```
+
+
+```{r}
+##### EORTc scores ########
+
+#install.packages("PROscorer")
+library(PROscorer)
+#cat(colnames(df_eortc), sep = "\n")
+# remove oes, pancreatic, bladder QLQ)
+
+# Define your core columns (if not already defined)
+core_cols <- c(
+  "record_id", "institute_abbreviation", "STUDY_SITE", "IC_DATE", "YEAR_OF_BIRTH",
+  "PLANNED_END_DATE", "BASE_PRIMARY_TUMOR_DATE", "BASE_C61_CLIN_T", "BASE_C61_CLIN_N", "BASE_C61_CLIN_M",
+  "PRE_C61_GLEASON_SCORE_YN", "PRE_C61_GLEASON_SCORE_DATE", "PRE_C61_GLEASON_SCORE_PRIMARY",
+  "PRE_C61_GLEASON_SCORE_SECONDARY", "PRE_C61_GLEASON_SCORE_TOTAL", "PRE_C61_PSA_YN", "PRE_C61_PSA_DATE",
+  "PRE_C61_PSA", "TREAT_RT_PHASE_1_START_DATE", "TREAT_RT_PHASE_1_END_DATE", "TREAT_RT_PHASE_1_TOTAL_FRACTIONS_COUNT",
+  "TREAT_RT_PHASE_1_TOTAL_DOSE", "TREAT_RT_PHASE_1_ADAPTATION_TECHNIQUE", "TREAT_RT_PHASE_1_ATS_ATP_RATIO",
+  "TREAT_RT_REIRRADIATION_SITE_YN", "TREAT_RT_MRL_COMMENTS_TXT", "TREAT_RT_COMPLETED_YN",
+  "TREAT_OTHER_HORMONE_YN", "TREAT_OTHER_HORMONE_START_DATE", "TREAT_OTHER_HORMONE_END_DATE",
+  "TREAT_OTHER_HORMONE_DURING_MRL_YN", "TREAT_OTHER_HORMONE_AGENT_TXT", "EOS_END_DATE", "EOS_DEATH_DATE"
+)
+
+# Select columns containing 'EORTC_QLQ_C30' or 'EORTC_QLQ_PR25' plus core columns
+cols_to_keep <- c(
+  core_cols,
+  grep("EORTC_QLQ_C30", names(df_eortc), value = TRUE),
+  grep("EORTC_QLQ_PR25", names(df_eortc), value = TRUE)
+)
+
+# Create new dataframe with just C30 and PR25 (and core columns)
+eortc_pc <- df_eortc[, unique(cols_to_keep)]
+
+# Remove the original df_eortc dataframe from the environment
+rm(df_eortc)
+
+#cat(colnames(eortc_pc), sep = "\n")
+
+# C30 items (questions 1–30)
+base_c30_items <- paste0("BASE_EORTC_QLQ_C30_", sprintf("%02d", 1:30))
+fu3m_c30_items <- paste0("FU3M_EORTC_QLQ_C30_", sprintf("%02d", 1:30))
+fu6m_c30_items <- paste0("FU6M_EORTC_QLQ_C30_", sprintf("%02d", 1:30))
+
+# PR25 items (questions 31–55)
+base_pr25_items <- paste0("BASE_EORTC_QLQ_PR25_", 31:55)
+fu3m_pr25_items <- paste0("FU3M_EORTC_QLQ_PR25_", 31:55)
+fu6m_pr25_items <- paste0("FU6M_EORTC_QLQ_PR25_", 31:55)
+
+
+```
+```{r}
+```
+
+
+```{r}
+#### Lets do c30 first ####
+### PROscorer needs the variables to follow its naming convention with qX for example. 
+
+# Replace all values not 1, 2, 3, 4, or NA with NA in the specified columns
+for (col in fu3m_c30_items) {
+  eortc_pc[[col]][!is.na(eortc_pc[[col]]) & !(eortc_pc[[col]] %in% 1:4)] <- NA
+}
+
+# Score C30 at baseline
+c30_scores_baseline <- PROscorer::qlq_c30(eortc_pc, items = base_c30_items)
+
+# Score C30 at 3 months
+c30_scores_fu3m <- PROscorer::qlq_c30(eortc_pc, items = fu3m_c30_items)
+
+# Score C30 at 6 months
+c30_scores_fu6m <- PROscorer::qlq_c30(eortc_pc, items = fu6m_c30_items)
+
+# Function to summarize QLQTOTAL with Q1 and Q3
+summary_qlqtotal <- function(score_df, timepoint_label) {
+  x <- score_df$QLQTOTAL
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  data.frame(
+    Timepoint = timepoint_label,
+    Scale = "QLQTOTAL",
+    n = sum(!is.na(x)),
+    Missing = sum(is.na(x)),
+    Median = median(x, na.rm = TRUE),
+    IQR = IQR(x, na.rm = TRUE),
+    Q1 = q1,
+    Q3 = q3
+  )
+}
+
+# Calculate summaries for each timepoint
+baseline_summary <- summary_qlqtotal(c30_scores_baseline, "Baseline")
+fu3m_summary     <- summary_qlqtotal(c30_scores_fu3m, "3 Months")
+fu6m_summary     <- summary_qlqtotal(c30_scores_fu6m, "6 Months")
+
+# Combine into one table
+all_summaries <- rbind(baseline_summary, fu3m_summary, fu6m_summary)
+print(all_summaries)
+
+
+```
+```{r}
+### repeat for PR25
+```
+
+
+```{r}
+# ---- 1. Define PR25 subscale item groups ---- manual scoring as PROScorer doesnt calc PR25
+#### Manual Scoring and Summarizing EORTC QLQ-PR25 at All Timepoints ####
+
+# ---- 1. Define PR25 subscale item groups ----
+# (Based on EORTC QLQ-PR25 scoring manual)
+
+# Baseline
+urinary_items_base         <- paste0("BASE_EORTC_QLQ_PR25_", 31:36)
+bowel_items_base           <- paste0("BASE_EORTC_QLQ_PR25_", 37:40)
+hormonal_items_base        <- paste0("BASE_EORTC_QLQ_PR25_", 41:45)
+sexual_activity_items_base <- paste0("BASE_EORTC_QLQ_PR25_", 46:47)
+sexual_functioning_items_base <- paste0("BASE_EORTC_QLQ_PR25_", 48:52)
+incontinence_aid_items_base   <- paste0("BASE_EORTC_QLQ_PR25_", 53:55)
+
+# 3 months
+urinary_items_fu3m         <- paste0("FU3M_EORTC_QLQ_PR25_", 31:36)
+bowel_items_fu3m           <- paste0("FU3M_EORTC_QLQ_PR25_", 37:40)
+hormonal_items_fu3m        <- paste0("FU3M_EORTC_QLQ_PR25_", 41:45)
+sexual_activity_items_fu3m <- paste0("FU3M_EORTC_QLQ_PR25_", 46:47)
+sexual_functioning_items_fu3m <- paste0("FU3M_EORTC_QLQ_PR25_", 48:52)
+incontinence_aid_items_fu3m   <- paste0("FU3M_EORTC_QLQ_PR25_", 53:55)
+
+# 6 months
+urinary_items_fu6m         <- paste0("FU6M_EORTC_QLQ_PR25_", 31:36)
+bowel_items_fu6m           <- paste0("FU6M_EORTC_QLQ_PR25_", 37:40)
+hormonal_items_fu6m        <- paste0("FU6M_EORTC_QLQ_PR25_", 41:45)
+sexual_activity_items_fu6m <- paste0("FU6M_EORTC_QLQ_PR25_", 46:47)
+sexual_functioning_items_fu6m <- paste0("FU6M_EORTC_QLQ_PR25_", 48:52)
+incontinence_aid_items_fu6m   <- paste0("FU6M_EORTC_QLQ_PR25_", 53:55)
+
+# ---- 2. Replace invalid values with NA ----
+replace_invalids <- function(df, items) {
+  for (col in items) {
+    df[[col]][!is.na(df[[col]]) & !(df[[col]] %in% 1:4)] <- NA
+  }
+  df
+}
+eortc_pc <- replace_invalids(eortc_pc, c(
+  urinary_items_base, bowel_items_base, hormonal_items_base,
+  sexual_activity_items_base, sexual_functioning_items_base, incontinence_aid_items_base,
+  urinary_items_fu3m, bowel_items_fu3m, hormonal_items_fu3m,
+  sexual_activity_items_fu3m, sexual_functioning_items_fu3m, incontinence_aid_items_fu3m,
+  urinary_items_fu6m, bowel_items_fu6m, hormonal_items_fu6m,
+  sexual_activity_items_fu6m, sexual_functioning_items_fu6m, incontinence_aid_items_fu6m
+))
+
+# ---- 3. Score subscales for each timepoint ----
+score_subscale <- function(df, items) {
+  raw_mean <- rowMeans(df[, items], na.rm = TRUE)
+  ((raw_mean - 1) / 3) * 100
+}
+
+# Baseline
+eortc_pc$BASE_PR25_Urinary           <- score_subscale(eortc_pc, urinary_items_base)
+eortc_pc$BASE_PR25_Bowel             <- score_subscale(eortc_pc, bowel_items_base)
+eortc_pc$BASE_PR25_Hormonal          <- score_subscale(eortc_pc, hormonal_items_base)
+eortc_pc$BASE_PR25_SexualActivity    <- score_subscale(eortc_pc, sexual_activity_items_base)
+eortc_pc$BASE_PR25_SexualFunctioning <- score_subscale(eortc_pc, sexual_functioning_items_base)
+eortc_pc$BASE_PR25_IncontinenceAid   <- score_subscale(eortc_pc, incontinence_aid_items_base)
+
+# Calculate QLQTOTAL as mean of all subscales (excluding NA)
+eortc_pc$BASE_PR25_QLQTOTAL <- rowMeans(eortc_pc[, c(
+  "BASE_PR25_Urinary", "BASE_PR25_Bowel", "BASE_PR25_Hormonal",
+  "BASE_PR25_SexualActivity", "BASE_PR25_SexualFunctioning", "BASE_PR25_IncontinenceAid"
+)], na.rm = TRUE)
+
+# 3 months
+eortc_pc$FU3M_PR25_Urinary           <- score_subscale(eortc_pc, urinary_items_fu3m)
+eortc_pc$FU3M_PR25_Bowel             <- score_subscale(eortc_pc, bowel_items_fu3m)
+eortc_pc$FU3M_PR25_Hormonal          <- score_subscale(eortc_pc, hormonal_items_fu3m)
+eortc_pc$FU3M_PR25_SexualActivity    <- score_subscale(eortc_pc, sexual_activity_items_fu3m)
+eortc_pc$FU3M_PR25_SexualFunctioning <- score_subscale(eortc_pc, sexual_functioning_items_fu3m)
+eortc_pc$FU3M_PR25_IncontinenceAid   <- score_subscale(eortc_pc, incontinence_aid_items_fu3m)
+
+eortc_pc$FU3M_PR25_QLQTOTAL <- rowMeans(eortc_pc[, c(
+  "FU3M_PR25_Urinary", "FU3M_PR25_Bowel", "FU3M_PR25_Hormonal",
+  "FU3M_PR25_SexualActivity", "FU3M_PR25_SexualFunctioning", "FU3M_PR25_IncontinenceAid"
+)], na.rm = TRUE)
+
+# 6 months
+eortc_pc$FU6M_PR25_Urinary           <- score_subscale(eortc_pc, urinary_items_fu6m)
+eortc_pc$FU6M_PR25_Bowel             <- score_subscale(eortc_pc, bowel_items_fu6m)
+eortc_pc$FU6M_PR25_Hormonal          <- score_subscale(eortc_pc, hormonal_items_fu6m)
+eortc_pc$FU6M_PR25_SexualActivity    <- score_subscale(eortc_pc, sexual_activity_items_fu6m)
+eortc_pc$FU6M_PR25_SexualFunctioning <- score_subscale(eortc_pc, sexual_functioning_items_fu6m)
+eortc_pc$FU6M_PR25_IncontinenceAid   <- score_subscale(eortc_pc, incontinence_aid_items_fu6m)
+
+eortc_pc$FU6M_PR25_QLQTOTAL <- rowMeans(eortc_pc[, c(
+  "FU6M_PR25_Urinary", "FU6M_PR25_Bowel", "FU6M_PR25_Hormonal",
+  "FU6M_PR25_SexualActivity", "FU6M_PR25_SexualFunctioning", "FU6M_PR25_IncontinenceAid"
+)], na.rm = TRUE)
+
+# ---- 4. Summarize scores for each subscale and timepoint ----
+summary_pr25 <- function(score_vector, timepoint_label, scale_label) {
+  q1 <- quantile(score_vector, 0.25, na.rm = TRUE)
+  q3 <- quantile(score_vector, 0.75, na.rm = TRUE)
+  data.frame(
+    Timepoint = timepoint_label,
+    Scale = scale_label,
+    n = sum(!is.na(score_vector)),
+    Missing = sum(is.na(score_vector)),
+    Median = median(score_vector, na.rm = TRUE),
+    IQR = IQR(score_vector, na.rm = TRUE),
+    Q1 = q1,
+    Q3 = q3
+  )
+}
+
+# Summarize all subscales and QLQTOTAL for each timepoint
+baseline_summary <- rbind(
+  summary_pr25(eortc_pc$BASE_PR25_Urinary, "Baseline", "Urinary Symptoms"),
+  summary_pr25(eortc_pc$BASE_PR25_Bowel, "Baseline", "Bowel Symptoms"),
+  summary_pr25(eortc_pc$BASE_PR25_Hormonal, "Baseline", "Hormonal Symptoms"),
+  summary_pr25(eortc_pc$BASE_PR25_SexualActivity, "Baseline", "Sexual Activity"),
+  summary_pr25(eortc_pc$BASE_PR25_SexualFunctioning, "Baseline", "Sexual Functioning"),
+  summary_pr25(eortc_pc$BASE_PR25_IncontinenceAid, "Baseline", "Incontinence Aid"),
+  summary_pr25(eortc_pc$BASE_PR25_QLQTOTAL, "Baseline", "QLQTOTAL")
+)
+
+fu3m_summary <- rbind(
+  summary_pr25(eortc_pc$FU3M_PR25_Urinary, "3 Months", "Urinary Symptoms"),
+  summary_pr25(eortc_pc$FU3M_PR25_Bowel, "3 Months", "Bowel Symptoms"),
+  summary_pr25(eortc_pc$FU3M_PR25_Hormonal, "3 Months", "Hormonal Symptoms"),
+  summary_pr25(eortc_pc$FU3M_PR25_SexualActivity, "3 Months", "Sexual Activity"),
+  summary_pr25(eortc_pc$FU3M_PR25_SexualFunctioning, "3 Months", "Sexual Functioning"),
+  summary_pr25(eortc_pc$FU3M_PR25_IncontinenceAid, "3 Months", "Incontinence Aid"),
+  summary_pr25(eortc_pc$FU3M_PR25_QLQTOTAL, "3 Months", "QLQTOTAL")
+)
+
+fu6m_summary <- rbind(
+  summary_pr25(eortc_pc$FU6M_PR25_Urinary, "6 Months", "Urinary Symptoms"),
+  summary_pr25(eortc_pc$FU6M_PR25_Bowel, "6 Months", "Bowel Symptoms"),
+  summary_pr25(eortc_pc$FU6M_PR25_Hormonal, "6 Months", "Hormonal Symptoms"),
+  summary_pr25(eortc_pc$FU6M_PR25_SexualActivity, "6 Months", "Sexual Activity"),
+  summary_pr25(eortc_pc$FU6M_PR25_SexualFunctioning, "6 Months", "Sexual Functioning"),
+  summary_pr25(eortc_pc$FU6M_PR25_IncontinenceAid, "6 Months", "Incontinence Aid"),
+  summary_pr25(eortc_pc$FU6M_PR25_QLQTOTAL, "6 Months", "QLQTOTAL")
+)
+
+# Combine all summaries into one table
+all_pr25_summaries <- rbind(baseline_summary, fu3m_summary, fu6m_summary)
+print(all_pr25_summaries)
+```
+
+
+```{r}
+
+# Save the summary tables for PR25 and C30 outcomes to your working directory
+
+# Create a Word document
+doc <- read_docx()
+
+# Add C30 summary table to the Word doc
+doc <- doc %>%
+  body_add_par("EORTC QLQ-C30 Outcomes Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(all_summaries))
+
+# Add a page break
+doc <- body_add_break(doc)
+
+# Add PR25 summary table to the Word doc
+doc <- doc %>%
+  body_add_par("EORTC QLQ-PR25 Outcomes Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(all_pr25_summaries))
+
+# Save the Word document to working directory
+print(doc, target = "EORTC_Outcomes_Summaries.docx")
+```
+
+
+```{r}
+######### EQ5D5L #################
+
+#install.packages("eq5d")
+library(eq5d)
+rm(list = ls(pattern = "(?i)eortc"))
+df_eq <- readRDS("df_eq5d5l.rds")
+cat(colnames(df_eq), sep = "\n")
+```
+
+
+```{r}
+# Define EQ-5D-5L domain variable names for each timepoint
+base_eq5d5l_items <- paste0("BASE_EQ5D5L_020", 1:5)
+fu3m_eq5d5l_items <- paste0("FU3M_EQ5D5L_020", 1:5)
+fu6m_eq5d5l_items <- paste0("FU6M_EQ5D5L_020", 1:5)
+
+# Function to summarize each domain
+summary_domains <- function(df, columns, timepoint_label) {
+  data.frame(
+    Timepoint = timepoint_label,
+    Domain = columns,
+    N = sapply(df[, columns], function(x) sum(!is.na(x))),
+    Missing = sapply(df[, columns], function(x) sum(is.na(x))),
+    Median = sapply(df[, columns], function(x) median(x, na.rm = TRUE)),
+    Q1 = sapply(df[, columns], function(x) quantile(x, 0.25, na.rm = TRUE)),
+    Q3 = sapply(df[, columns], function(x) quantile(x, 0.75, na.rm = TRUE))
+  )
+}
+
+# Calculate summaries for each timepoint
+baseline_summary <- summary_domains(df_eq, base_eq5d5l_items, "Baseline")
+fu3m_summary     <- summary_domains(df_eq, fu3m_eq5d5l_items, "3 Months")
+fu6m_summary     <- summary_domains(df_eq, fu6m_eq5d5l_items, "6 Months")
+
+# Combine all summaries into one table
+eq5d5l_domain_timepoint_summary <- rbind(baseline_summary, fu3m_summary, fu6m_summary)
+
+# Print the summary table
+print(eq5d5l_domain_timepoint_summary)
+# Define the mapping from your column names to EQ-5D-5L abbreviations
+domain_map <- c(
+  "BASE_EQ5D5L_0201" = "MO",
+  "BASE_EQ5D5L_0202" = "SC",
+  "BASE_EQ5D5L_0203" = "UA",
+  "BASE_EQ5D5L_0204" = "PD",
+  "BASE_EQ5D5L_0205" = "AD",
+  "FU3M_EQ5D5L_0201" = "MO",
+  "FU3M_EQ5D5L_0202" = "SC",
+  "FU3M_EQ5D5L_0203" = "UA",
+  "FU3M_EQ5D5L_0204" = "PD",
+  "FU3M_EQ5D5L_0205" = "AD",
+  "FU6M_EQ5D5L_0201" = "MO",
+  "FU6M_EQ5D5L_0202" = "SC",
+  "FU6M_EQ5D5L_0203" = "UA",
+  "FU6M_EQ5D5L_0204" = "PD",
+  "FU6M_EQ5D5L_0205" = "AD"
+)
+
+# Apply the mapping to your summary table
+eq5d5l_domain_timepoint_summary$Domain <- domain_map[eq5d5l_domain_timepoint_summary$Domain]
+
+# Print the updated summary table
+print(eq5d5l_domain_timepoint_summary)
+
+
+```
+
+
+```{r}
+
+doc_eq5d5l_domains <- read_docx()
+doc_eq5d5l_domains <- doc_eq5d5l_domains %>%
+  body_add_par("EQ-5D-5L Domain Outcomes Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(eq5d5l_domain_timepoint_summary))
+
+print(doc_eq5d5l_domains, target = "EQ5D5L_Domain_Outcomes_Summary.docx")
+
+
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+```{r}
+##### eq5d health score ########
+
+# Summarize the EQ-5D-5L VAS (patient health score, usually variable 0206) at baseline, 3 months, and 6 months
+
+# Function to summarize VAS scores at a given timepoint
+summary_eq5d5l_vas <- function(score_vector, timepoint_label) {
+  q1 <- quantile(score_vector, 0.25, na.rm = TRUE)
+  q3 <- quantile(score_vector, 0.75, na.rm = TRUE)
+  data.frame(
+    Timepoint = timepoint_label,
+    Scale = "EQ5D5L_VAS",
+    n = sum(!is.na(score_vector)),
+    Missing = sum(is.na(score_vector)),
+    Median = median(score_vector, na.rm = TRUE),
+    IQR = IQR(score_vector, na.rm = TRUE),
+    Q1 = q1,
+    Q3 = q3
+  )
+}
+
+# Summarize VAS at each timepoint
+vas_baseline_summary <- summary_eq5d5l_vas(df_eq$BASE_EQ5D5L_0206, "Baseline")
+vas_fu3m_summary     <- summary_eq5d5l_vas(df_eq$FU3M_EQ5D5L_0206, "3 Months")
+vas_fu6m_summary     <- summary_eq5d5l_vas(df_eq$FU6M_EQ5D5L_0206, "6 Months")
+
+# Combine VAS summaries into one table
+vas_timepoint_summary <- rbind(vas_baseline_summary, vas_fu3m_summary, vas_fu6m_summary)
+
+# Print the summary table
+print(vas_timepoint_summary)
+
+doc_eq5d5l_vas <- read_docx()
+doc_eq5d5l_vas <- doc_eq5d5l_vas %>%
+  body_add_par("EQ-5D-5L VAS Outcomes Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(vas_timepoint_summary))
+
+
+print(doc_eq5d5l_vas, target = "EQ5D5L_VAS_Outcomes_Summary.docx")
+
+```
+
+```{r}
+######### ct cae ################
+
+
+# Clear the environment 
+
+rm(list = c(
+  "eortc_pc", "c30_scores_baseline", "c30_scores_fu3m", "c30_scores_fu6m",
+  "pr25_scores_baseline", "pr25_scores_fu3m", "pr25_scores_fu6m",
+  "df_eq", "df_eq5d5l", "df_eq5d51",
+  "eq5d5l_nl_baseline_summary", "eq5d5l_nl_fu3m_summary", "eq5d5l_nl_fu6m_summary",
+  "eq5d5l_vas_baseline", "eq5d5l_vas_fu3m", "eq5d5l_vas_fu6m",
+  "eq5d5l_nl_index_timepoint_summary", "eq5d5l_nl_vas_timepoint_summary",
+  "eq5d5l_domain_timepoint_summary", "vas_timepoint_summary", "df_clin", "df_truncated"
+))
+
+# Load the CTCAE data from the RDS file
+df_ctcae <- readRDS("df_ctcae.rds")
+
+cat(colnames(df_ctcae), sep = "\n")
+
+```
+
+
+```{r}
+## created a CTCAE dictionary from erwin's main dictionary in case I need for reference
+
+```
+
+```{r}
+#
+
+
+
+pre_vars <- c(
+ 
+  "PRE_CTCAE_10774", "PRE_CTCAE_10774_DATE",
+  "PRE_CTCAE_12727", "PRE_CTCAE_12727_DATE",
+  "PRE_CTCAE_16296", "PRE_CTCAE_16296_DATE",
+  "PRE_CTCAE_38064", "PRE_CTCAE_38064_DATE",
+  "PRE_CTCAE_63190", "PRE_CTCAE_63190_DATE",
+  "PRE_CTCAE_38072", "PRE_CTCAE_38072_DATE",
+  "PRE_CTCAE_47700", "PRE_CTCAE_47700_DATE",
+  "PRE_CTCAE_16256", "PRE_CTCAE_16256_DATE",
+  "PRE_CTCAE_61103", "PRE_CTCAE_61103_DATE",
+  "PRE_CTCAE_02646_DATE",
+  "PRE_CTCAE_65798",  "PRE_CTCAE_46539", "PRE_CTCAE_46539_DATE",
+  "PRE_CTCAE_46543", "PRE_CTCAE_46543_DATE",
+  "PRE_CTCAE_46555", "PRE_CTCAE_46555_DATE",
+  "PRE_CTCAE_62225", "PRE_CTCAE_62225_DATE",
+  "PRE_CTCAE_46593", "PRE_CTCAE_46593_DATE",
+  "PRE_CTCAE_61461", "PRE_CTCAE_61461_DATE"
+)
+
+
+fu3m_vars <-  c(
+  "FU3M_CTCAE_00081",         # Abdominal pain
+  "FU3M_CTCAE_00081_DATE",
+  "FU3M_CTCAE_05265",         # Bloating
+  "FU3M_CTCAE_05265_DATE",
+  "FU3M_CTCAE_10774",         # Constipation
+  "FU3M_CTCAE_10774_DATE",
+  "FU3M_CTCAE_12727",         # Diarrhea
+  "FU3M_CTCAE_12727_DATE",
+  "FU3M_CTCAE_16296",         # Fecal incontinence
+  "FU3M_CTCAE_16296_DATE",
+  "FU3M_CTCAE_38064",         # Rectal hemorrhage
+  "FU3M_CTCAE_38064_DATE",
+  "FU3M_CTCAE_63190",         # Rectal mucositis
+  "FU3M_CTCAE_63190_DATE",
+  "FU3M_CTCAE_38072",         # Rectal pain
+  "FU3M_CTCAE_38072_DATE",
+  "FU3M_CTCAE_47700",         # Vomiting
+  "FU3M_CTCAE_47700_DATE",
+  "FU3M_CTCAE_16256",         # Fatigue
+  "FU3M_CTCAE_16256_DATE",
+  "FU3M_CTCAE_61103",         # Dermatitis radiation
+  "FU3M_CTCAE_61103_DATE",
+  "FU3M_CTCAE_65798",         # Superficial soft tissue fibrosis
+  "FU3M_CTCAE_63057",         # Cystitis noninfective
+  "FU3M_CTCAE_63057_DATE",
+  "FU3M_CTCAE_19450",         # Hematuria
+  "FU3M_CTCAE_19450_DATE",
+  "FU3M_CTCAE_46628",         # Urine discoloration
+  "FU3M_CTCAE_46628_DATE",
+  "FU3M_CTCAE_46539",         # Urinary frequency
+  "FU3M_CTCAE_46539_DATE",
+  "FU3M_CTCAE_46543",         # Urinary incontinence
+  "FU3M_CTCAE_46543_DATE",
+  "FU3M_CTCAE_46555",         # Urinary retention
+  "FU3M_CTCAE_46555_DATE",
+  "FU3M_CTCAE_62225",         # Urinary tract pain
+  "FU3M_CTCAE_62225_DATE",
+  "FU3M_CTCAE_46593",         # Urinary urgency
+  "FU3M_CTCAE_46593_DATE",
+  "FU3M_CTCAE_61461",         # Erectile dysfunction
+  "FU3M_CTCAE_61461_DATE"
+)
+  
+  
+  
+  fu6m_vars <- c(
+  "FU6M_CTCAE_00081",         # Abdominal pain
+  "FU6M_CTCAE_00081_DATE",
+  "FU6M_CTCAE_05265",         # Bloating
+  "FU6M_CTCAE_05265_DATE",
+  "FU6M_CTCAE_10774",         # Constipation
+  "FU6M_CTCAE_10774_DATE",
+  "FU6M_CTCAE_12727",         # Diarrhea
+  "FU6M_CTCAE_12727_DATE",
+  "FU6M_CTCAE_16296",         # Fecal incontinence
+  "FU6M_CTCAE_16296_DATE",
+  "FU6M_CTCAE_38064",         # Rectal hemorrhage
+  "FU6M_CTCAE_38064_DATE",
+  "FU6M_CTCAE_63190",         # Rectal mucositis
+  "FU6M_CTCAE_63190_DATE",
+  "FU6M_CTCAE_38072",         # Rectal pain
+  "FU6M_CTCAE_38072_DATE",
+  "FU6M_CTCAE_47700",         # Vomiting
+  "FU6M_CTCAE_47700_DATE",
+  "FU6M_CTCAE_16256",         # Fatigue
+  "FU6M_CTCAE_16256_DATE",
+  "FU6M_CTCAE_61103",         # Dermatitis radiation
+  "FU6M_CTCAE_61103_DATE",
+  "FU6M_CTCAE_65798",         # Superficial soft tissue fibrosis
+  "FU6M_CTCAE_63057",         # Cystitis noninfective
+  "FU6M_CTCAE_63057_DATE",
+  "FU6M_CTCAE_19450",         # Hematuria
+  "FU6M_CTCAE_19450_DATE",
+  "FU6M_CTCAE_46628",         # Urine discoloration
+  "FU6M_CTCAE_46628_DATE",
+  "FU6M_CTCAE_46539",         # Urinary frequency
+  "FU6M_CTCAE_46539_DATE",
+  "FU6M_CTCAE_46543",         # Urinary incontinence
+  "FU6M_CTCAE_46543_DATE",
+  "FU6M_CTCAE_46555",         # Urinary retention
+  "FU6M_CTCAE_46555_DATE",
+  "FU6M_CTCAE_62225",         # Urinary tract pain
+  "FU6M_CTCAE_62225_DATE",
+  "FU6M_CTCAE_46593",         # Urinary urgency
+  "FU6M_CTCAE_46593_DATE",
+  "FU6M_CTCAE_61461",         # Erectile dysfunction
+  "FU6M_CTCAE_61461_DATE"
+)
+  
+rm(all_ctcae_summaries)
+# Apply to each list
+pre_vars_clean <- remove_date_vars(pre_vars)
+fu3m_vars_clean <- remove_date_vars(fu3m_vars)
+fu6m_vars_clean <- remove_date_vars(fu6m_vars)
+
+
+
+
+# Patient-level long format for Baseline
+long_pre <- df_ctcae %>%
+  select(all_of(core_cols), all_of(pre_vars_clean)) %>%
+  pivot_longer(
+    cols = all_of(pre_vars_clean),
+    names_to = "Variable",
+    values_to = "Grade"
+  ) %>%
+  mutate(Timepoint = "Baseline")
+
+# Patient-level long format for 3 Months
+long_fu3m <- df_ctcae %>%
+  select(all_of(core_cols), all_of(fu3m_vars_clean)) %>%
+  pivot_longer(
+    cols = all_of(fu3m_vars_clean),
+    names_to = "Variable",
+    values_to = "Grade"
+  ) %>%
+  mutate(Timepoint = "3 Months")
+
+# Patient-level long format for 6 Months
+long_fu6m <- df_ctcae %>%
+  select(all_of(core_cols), all_of(fu6m_vars_clean)) %>%
+  pivot_longer(
+    cols = all_of(fu6m_vars_clean),
+    names_to = "Variable",
+    values_to = "Grade"
+  ) %>%
+  mutate(Timepoint = "6 Months")
+
+# Combine all timepoints
+ctcae_patient_long <- bind_rows(long_pre, long_fu3m, long_fu6m)
+
+# If Grade is not numeric, coerce it
+ctcae_patient_long$Grade <- as.numeric(as.character(ctcae_patient_long$Grade))
+
+ctcae_counts_per_patient_timepoint <- ctcae_patient_long %>%
+  group_by(record_id, Timepoint) %>%
+  summarise(
+    Count_Grade_0 = sum(Grade == 0, na.rm = TRUE),
+    Count_Grade_1 = sum(Grade == 1, na.rm = TRUE),
+    Count_Grade_2 = sum(Grade == 2, na.rm = TRUE),
+    Count_Grade_3 = sum(Grade == 3, na.rm = TRUE),
+    Count_Grade_4 = sum(Grade == 4, na.rm = TRUE),
+    Count_Grade_5 = sum(Grade == 5, na.rm = TRUE),
+    Count_Missing = sum(is.na(Grade)),
+    Total_Entries = n(),
+    .groups = "drop"
+  )
+
+# View the result
+print(ctcae_counts_per_patient_timepoint)
+
+
+```
+
+
+```{r}
+
+# Count number of each grade per CTCAE question type ("Variable")
+ctcae_counts <- ctcae_patient_long %>%
+  group_by(Variable, Grade) %>%
+  summarise(n = n(), .groups = 'drop')
+
+# Optionally, reshape to a table format with grade counts wide per variable
+ctcae_summary <- ctcae_counts %>%
+  tidyr::pivot_wider(names_from = Grade, values_from = n, values_fill = 0)
+print(ctcae_summary)
+```
+
+```{r}
+## group variables into body systems GI, GU, ED, other 
+# ---- PRE-TREATMENT VARIABLES GROUPED BY BODY SYSTEM ----
+pre_gi_vars <- c(
+  "PRE_CTCAE_00081",  # Abdominal pain
+  "PRE_CTCAE_05265",  # Bloating
+  "PRE_CTCAE_10774",  # Constipation
+  "PRE_CTCAE_12727",  # Diarrhea
+  "PRE_CTCAE_16296",  # Fecal incontinence
+  "PRE_CTCAE_38064",  # Rectal hemorrhage
+  "PRE_CTCAE_63190",  # Rectal mucositis
+  "PRE_CTCAE_38072",  # Rectal pain
+  "PRE_CTCAE_47700",  # Vomiting
+  "PRE_CTCAE_16256"   # Fatigue
+)
+
+pre_gu_vars <- c(
+  "PRE_CTCAE_63057",  # Cystitis noninfective
+  "PRE_CTCAE_19450",  # Hematuria
+  "PRE_CTCAE_46628",  # Urine discoloration
+  "PRE_CTCAE_46539",  # Urinary frequency
+  "PRE_CTCAE_46543",  # Urinary incontinence
+  "PRE_CTCAE_46555",  # Urinary retention
+  "PRE_CTCAE_62225",  # Urinary tract pain
+  "PRE_CTCAE_46593"   # Urinary urgency
+)
+
+pre_erectile_dysfunction_vars <- c(
+  "PRE_CTCAE_61461"   # Erectile dysfunction
+)
+
+pre_other_vars <- c(
+  "PRE_CTCAE_61103",  # Dermatitis radiation
+  "PRE_CTCAE_65798"   # Superficial soft tissue fibrosis
+)
+
+
+# ---- 3-MONTH FOLLOW-UP VARIABLES ----
+fu3m_gi_vars <- c(
+  "FU3M_CTCAE_00081",
+  "FU3M_CTCAE_05265",
+  "FU3M_CTCAE_10774",
+  "FU3M_CTCAE_12727",
+  "FU3M_CTCAE_16296",
+  "FU3M_CTCAE_38064",
+  "FU3M_CTCAE_63190",
+  "FU3M_CTCAE_38072",
+  "FU3M_CTCAE_47700",
+  "FU3M_CTCAE_16256"
+)
+
+fu3m_gu_vars <- c(
+  "FU3M_CTCAE_63057",
+  "FU3M_CTCAE_19450",
+  "FU3M_CTCAE_46628",
+  "FU3M_CTCAE_46539",
+  "FU3M_CTCAE_46543",
+  "FU3M_CTCAE_46555",
+  "FU3M_CTCAE_62225",
+  "FU3M_CTCAE_46593"
+)
+
+fu3m_erectile_dysfunction_vars <- c(
+  "FU3M_CTCAE_61461"
+)
+
+fu3m_other_vars <- c(
+  "FU3M_CTCAE_61103",
+  "FU3M_CTCAE_65798"
+)
+
+
+# ---- 6-MONTH FOLLOW-UP VARIABLES ----
+fu6m_gi_vars <- c(
+  "FU6M_CTCAE_00081",
+  "FU6M_CTCAE_05265",
+  "FU6M_CTCAE_10774",
+  "FU6M_CTCAE_12727",
+  "FU6M_CTCAE_16296",
+  "FU6M_CTCAE_38064",
+  "FU6M_CTCAE_63190",
+  "FU6M_CTCAE_38072",
+  "FU6M_CTCAE_47700",
+  "FU6M_CTCAE_16256"
+)
+
+fu6m_gu_vars <- c(
+  "FU6M_CTCAE_63057",
+  "FU6M_CTCAE_19450",
+  "FU6M_CTCAE_46628",
+  "FU6M_CTCAE_46539",
+  "FU6M_CTCAE_46543",
+  "FU6M_CTCAE_46555",
+  "FU6M_CTCAE_62225",
+  "FU6M_CTCAE_46593"
+)
+
+fu6m_erectile_dysfunction_vars <- c(
+  "FU6M_CTCAE_61461"
+)
+
+fu6m_other_vars <- c(
+  "FU6M_CTCAE_61103",
+  "FU6M_CTCAE_65798"
+)
+
+```
+
+```{r}
+
+###counts by body systems ctcae grade
+
+count_grades <- function(df, var_list, system_name, timepoint) {
+  df %>%
+    dplyr::select(dplyr::any_of(var_list)) %>%
+    tidyr::pivot_longer(cols = dplyr::everything(), values_to = "Grade") %>%
+    dplyr::mutate(
+      Grade = as.character(Grade),
+      BodySystem = system_name,
+      Timepoint = timepoint
+    ) %>%
+    dplyr::count(Timepoint, BodySystem, Grade) %>%
+    tidyr::complete(Grade = c("0", "1", "2", "3", "4", NA), fill = list(n = 0)) %>%
+    dplyr::mutate(Grade = ifelse(is.na(Grade), "NA", Grade))
+}
+
+
+# Combine for all time and system groups as needed
+pre_gi_counts    <- count_grades(df_ctcae, pre_gi_vars,    "GI",                "PRE")
+pre_gu_counts    <- count_grades(df_ctcae, pre_gu_vars,    "GU",                "PRE")
+pre_ed_counts    <- count_grades(df_ctcae, pre_erectile_dysfunction_vars, "Erectile Dysfunction", "PRE")
+pre_other_counts <- count_grades(df_ctcae, pre_other_vars, "Other",             "PRE")
+
+fu3m_gi_counts    <- count_grades(df_ctcae, fu3m_gi_vars,    "GI",                "3M")
+fu3m_gu_counts    <- count_grades(df_ctcae, fu3m_gu_vars,    "GU",                "3M")
+fu3m_ed_counts    <- count_grades(df_ctcae, fu3m_erectile_dysfunction_vars, "Erectile Dysfunction", "3M")
+fu3m_other_counts <- count_grades(df_ctcae, fu3m_other_vars, "Other",             "3M")
+
+fu6m_gi_counts    <- count_grades(df_ctcae, fu6m_gi_vars,    "GI",                "6M")
+fu6m_gu_counts    <- count_grades(df_ctcae, fu6m_gu_vars,    "GU",                "6M")
+fu6m_ed_counts    <- count_grades(df_ctcae, fu6m_erectile_dysfunction_vars, "Erectile Dysfunction", "6M")
+fu6m_other_counts <- count_grades(df_ctcae, fu6m_other_vars, "Other",             "6M")
+
+# Combine GI grade counts for PRE, 3M, and 6M, and create a summary table
+
+# Bind the GI results for all three timepoints
+combined_gi_counts <- dplyr::bind_rows(
+  pre_gi_counts,
+  fu3m_gi_counts,
+  fu6m_gi_counts
+)
+
+# Combine all GI counts
+combined_gi_counts <- dplyr::bind_rows(
+  pre_gi_counts,
+  fu3m_gi_counts,
+  fu6m_gi_counts
+)
+
+# Replace NA in 'Grade' with "NA" character and forcibly make all grades as character
+combined_gi_counts <- combined_gi_counts %>%
+  dplyr::mutate(Grade = as.character(Grade)) %>%
+  dplyr::mutate(Grade = ifelse(is.na(Grade), "NA", Grade))
+
+# Ensure every possible Grade appears for every Timepoint
+all_grades <- c("-1", "0", "1", "2", "3", "4", "NA")
+all_timepoints <- unique(combined_gi_counts$Timepoint)
+expand_grid <- tidyr::expand_grid(
+  Timepoint = all_timepoints,
+  BodySystem = "GI",
+  Grade = all_grades
+)
+
+# Merge and replace missing n's with 0
+combined_gi_counts_filled <- expand_grid %>%
+  dplyr::left_join(combined_gi_counts, by = c("Timepoint", "BodySystem", "Grade")) %>%
+  dplyr::mutate(n = ifelse(is.na(n), 0, n))
+
+# Pivot wider to get one row per Timepoint, one column per Grade
+gi_summary_table <- combined_gi_counts_filled %>%
+  tidyr::pivot_wider(
+    names_from = Grade,
+    values_from = n,
+    names_prefix = "Grade_"
+  ) %>%
+  dplyr::arrange(factor(Timepoint, levels = c("PRE", "3M", "6M")))
+
+# See final output
+print(gi_summary_table)
+
+```
+```{r}
+# Combine GU grade counts for PRE, 3M, and 6M, and create a summary table
+
+# Bind the GU results for all three timepoints
+combined_gu_counts <- dplyr::bind_rows(
+  pre_gu_counts,
+  fu3m_gu_counts,
+  fu6m_gu_counts
+)
+
+# Replace NA in 'Grade' with "NA" character and forcibly make all grades as character
+combined_gu_counts <- combined_gu_counts %>%
+  dplyr::mutate(Grade = as.character(Grade)) %>%
+  dplyr::mutate(Grade = ifelse(is.na(Grade), "NA", Grade))
+
+# Ensure every possible Grade appears for every Timepoint
+all_grades <- c("0", "1", "2", "3", "4", "NA")
+all_timepoints <- unique(combined_gu_counts$Timepoint)
+expand_grid <- tidyr::expand_grid(
+  Timepoint = all_timepoints,
+  BodySystem = "GU",
+  Grade = all_grades
+)
+
+# Merge and replace missing n's with 0
+combined_gu_counts_filled <- expand_grid %>%
+  dplyr::left_join(combined_gu_counts, by = c("Timepoint", "BodySystem", "Grade")) %>%
+  dplyr::mutate(n = ifelse(is.na(n), 0, n))
+
+# Pivot wider to get one row per Timepoint, one column per Grade
+gu_summary_table <- combined_gu_counts_filled %>%
+  tidyr::pivot_wider(
+    names_from = Grade,
+    values_from = n,
+    names_prefix = "Grade_"
+  ) %>%
+  dplyr::arrange(factor(Timepoint, levels = c("PRE", "3M", "6M")))
+
+# See final output
+print(gu_summary_table)
+
+```
+```{r}
+# Erectile Dysfunction (ED) summary for PRE, 3M, and 6M
+
+# Bind ED results from all timepoints
+combined_ed_counts <- dplyr::bind_rows(
+  pre_ed_counts,
+  fu3m_ed_counts,
+  fu6m_ed_counts
+)
+
+# Clean up Grade values and ensure all grades/timepoints present
+combined_ed_counts <- combined_ed_counts %>%
+  dplyr::mutate(Grade = as.character(Grade)) %>%
+  dplyr::mutate(Grade = ifelse(is.na(Grade), "NA", Grade))
+
+all_grades <- c("0", "1", "2", "3", "4", "NA")
+all_timepoints <- unique(combined_ed_counts$Timepoint)
+expand_grid <- tidyr::expand_grid(
+  Timepoint = all_timepoints,
+  BodySystem = "Erectile Dysfunction",
+  Grade = all_grades
+)
+
+combined_ed_counts_filled <- expand_grid %>%
+  dplyr::left_join(combined_ed_counts, by = c("Timepoint", "BodySystem", "Grade")) %>%
+  dplyr::mutate(n = ifelse(is.na(n), 0, n))
+
+ed_summary_table <- combined_ed_counts_filled %>%
+  tidyr::pivot_wider(
+    names_from = Grade,
+    values_from = n,
+    names_prefix = "Grade_"
+  ) %>%
+  dplyr::arrange(factor(Timepoint, levels = c("PRE", "3M", "6M")))
+
+print(ed_summary_table)
+
+
+# Other body system summary for PRE, 3M, and 6M
+
+combined_other_counts <- dplyr::bind_rows(
+  pre_other_counts,
+  fu3m_other_counts,
+  fu6m_other_counts
+)
+
+combined_other_counts <- combined_other_counts %>%
+  dplyr::mutate(Grade = as.character(Grade)) %>%
+  dplyr::mutate(Grade = ifelse(is.na(Grade), "NA", Grade))
+
+all_timepoints_other <- unique(combined_other_counts$Timepoint)
+expand_grid_other <- tidyr::expand_grid(
+  Timepoint = all_timepoints_other,
+  BodySystem = "Other",
+  Grade = all_grades
+)
+
+combined_other_counts_filled <- expand_grid_other %>%
+  dplyr::left_join(combined_other_counts, by = c("Timepoint", "BodySystem", "Grade")) %>%
+  dplyr::mutate(n = ifelse(is.na(n), 0, n))
+
+other_summary_table <- combined_other_counts_filled %>%
+  tidyr::pivot_wider(
+    names_from = Grade,
+    values_from = n,
+    names_prefix = "Grade_"
+  ) %>%
+  dplyr::arrange(factor(Timepoint, levels = c("PRE", "3M", "6M")))
+
+print(other_summary_table)
+
+
+```
+```{r}
+library(flextable)
+library(officer)
+
+
+doc <- officer::read_docx()
+
+# Add GI Summary Table
+doc <- doc %>%
+  officer::body_add_par("Gastrointestinal (GI) CTCAE Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(gi_summary_table)) %>%
+  officer::body_add_par("", style = "Normal")
+
+# Add GU Summary Table
+doc <- doc %>%
+  officer::body_add_par("Genitourinary (GU) CTCAE Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(gu_summary_table)) %>%
+  officer::body_add_par("", style = "Normal")
+
+# Add Erectile Dysfunction Table
+doc <- doc %>%
+  officer::body_add_par("Erectile Dysfunction CTCAE Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(ed_summary_table)) %>%
+  officer::body_add_par("", style = "Normal")
+
+# Add Other CTCAE Table
+doc <- doc %>%
+  officer::body_add_par("Other CTCAE Summary", style = "heading 1") %>%
+  body_add_flextable(flextable(other_summary_table)) %>%
+  officer::body_add_par("", style = "Normal")
+
+# Save the Word document
+print(doc, target = "ctcae_summary_tables.docx")
+
+```
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,801 @@
+---
+title: "Volume 29.4.25"
+output: html_document
+date: "2025-04-29"
+---
+
+```{r setup, include=FALSE}
+rm(list=ls(all=TRUE))
+
+library(tidyverse)
+library(gridExtra)
+library(forcats)
+library(ggpubr)
+library(forcats)
+library(lubridate)
+library(dplyr)
+library(scales)
+library(tidycmprsk)
+library(gtsummary)
+library(shiny)
+library(reporter)
+library(officer)
+library(flextable)
+library(ggplot2)
+library(knitr)
+library(rmarkdown)
+library(patchwork)
+library(kableExtra)
+library(stats)
+library(readxl)
+```
+
+```{r}
+#set up
+
+setwd("C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM")
+# Import Excel file 
+excel_path <- "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Excels/Mastersheet 1.5.25.xlsx"
+df <- readxl::read_excel(excel_path)
+
+# Save as CSV in the working directory
+csv_path <- "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/R script/Volume/Mastersheet_1.5.25.csv"
+utils::write.csv(df, file = csv_path, row.names = FALSE)
+
+#truncate columns (16k from original excel file)
+df_truncated <- df[, 1:76]
+rm(df)
+gc()
+#remove dud columns#
+df_truncated <- df_truncated[, !names(df_truncated) %in% "Plan Count"]
+
+getwd()
+list.files()
+
+
+
+#reload this instead of original csv###
+df_truncated <- readRDS("Mastersheet_1.5.25_truncated.rds")
+
+
+```
+
+```{r}
+### clean data###
+
+#names of variables## 
+data.frame(variable = colnames(df_truncated))
+
+#remove dud columns#
+df_truncated <- df_truncated[, !names(df_truncated) %in% c("Plan Count", "Prostate")]
+
+#rename columns
+colnames(df_truncated)[6] <- "ROI"
+
+saveRDS(df_truncated, "Mastersheet_1.5.25_truncated.rds")
+
+colnames(df_truncated)
+
+### lets leave this bit until we know we need to convert classes#####
+#unique_day0_entries <- unique(df_truncated[["Day 0"]])
+#print(unique_day0_entries)
+
+df<-df_truncated
+
+unique_ROI<-unique(df$`ROI(s)...12`)
+print(unique_ROI)
+
+```
+```{r}
+#### remove centres that do ATP only e.g. The christie
+
+df <- df[df$Institution != "GBR_CHNHSFT-MCRC", ]
+```
+
+
+```{r}
+##cuvee selection##
+
+###1st cuvee trial with subset 
+
+
+# Define prostate labels (expanded list)
+prostate_rois <- c(
+  # Basic prostate
+  'prostate', ' prostate', 'prostate ',
+  
+  # Prostate only
+  'prostateonly', ' prostateonly', 'prostateonly ',
+  
+  # Dutch/Flemish prostaat
+  'prostaat', ' prostaat', 'prostaat ',
+  
+  # Corpus prostaat variations
+  'corpus prostaat', ' corpus prostaat', 'corpus prostaat ',
+  'corpus_prostaat', ' corpus_prostaat', 'corpus_prostaat ',
+  'corpusprostaat', ' corpusprostaat', 'corpusprostaat ',
+  
+  # Latin prostata
+  'prostata', ' prostata', 'prostata ',
+  
+  # Prostate + GTV variations
+  'prostate + gtv', ' prostate + gtv', 'prostate + gtv ',
+  'prostate_+_gtv', ' prostate_+_gtv', 'prostate_+_gtv ',
+  'prostate +gtv', ' prostate +gtv', 'prostate +gtv ',
+  'prostate+ gtv', ' prostate+ gtv', 'prostate+ gtv ',
+  'prostate+gtv', ' prostate+gtv', 'prostate+gtv ',
+  'prostate_gtv', ' prostate_gtv', 'prostate_gtv ',
+  'prostate gtv', ' prostate gtv', 'prostate gtv ',
+  
+  # Prostate KBV variations
+  'prostate kbv', ' prostate kbv', 'prostate kbv ',
+  'prostate_kbv', ' prostate_kbv', 'prostate_kbv ',
+  'prostatekbv', ' prostatekbv', 'prostatekbv ',
+  'prostate k?bv', ' prostate k?bv', 'prostate k?bv ',
+  'prostate_k?bv', ' prostate_k?bv', 'prostate_k?bv ',
+  
+  # Prostate MR variations
+  'prostate mr', ' prostate mr', 'prostate mr ',
+  'prostate_mr', ' prostate_mr', 'prostate_mr ',
+  'prostatemr', ' prostatemr', 'prostatemr '
+)
+```
+
+
+```{r}
+############# loop to extract volumes ##########
+result <- list()
+
+for (i in seq_len(nrow(df))) {
+  row_data <- df[i, ]
+  patient_id <- row_data[[2]] # Use actual Patient Id column
+  dose <- row_data[[3]]
+  fractions <- row_data[[4]]
+  col_idx <- 5  # Adjusted for column positions
+
+  day <- 0
+  while (col_idx < ncol(row_data)) {
+    rois_raw <- as.character(row_data[[col_idx]])
+    vols_raw <- as.character(row_data[[col_idx + 1]])
+    
+    if (!is.na(rois_raw) && !is.na(vols_raw)) {
+      rois <- unlist(str_split(rois_raw, "\\|"))
+      vols <- unlist(str_split(vols_raw, "\\|"))
+      if (length(rois) == length(vols)) {
+        vols_numeric <- suppressWarnings(as.numeric(vols))
+       df_temp <- tibble(ROI = rois, Volume = vols_numeric) %>%
+          filter(tolower(ROI) %in% tolower(prostate_rois), !is.na(Volume))
+        if (nrow(df_temp) > 0) {
+          selected <- df_temp %>% slice_min(order_by = Volume, n = 1)
+          result[[length(result) + 1]] <- tibble(
+            Patient_ID = patient_id,
+            Dose = dose,
+            Fractions = fractions,
+            Day = day,
+            ROI = selected$ROI,
+            Volume = selected$Volume
+          )
+        }
+      }
+    }
+    day <- day + 1
+    col_idx <- col_idx + 2
+  }
+}
+
+
+
+final_df <- bind_rows(result)
+head(final_df)
+unique(final_df$Patient_ID)
+
+length(unique(final_df$Patient_ID))
+```
+
+```{r}
+#second filter##
+
+#substract first filter from original df##
+
+
+# Remove patients using anti_join (keeps rows in df that don't match final_df)
+
+second_filter <- df %>%
+  anti_join(final_df, by = c("Patient Id" = "Patient_ID"))
+
+uniq_2nd<-unique(second_filter$ROI)
+print(uniq_2nd)
+```
+
+
+```{r}
+##define 2nd filter prostate terms###
+
+second_ROI <- c(
+  "CTV_3625", "CTVpros", "|CTVpros|", "CTV_Prostate", "|CTV_prostate|", 
+  "CTV (prst en gtv+4mm)", "CTVpros+sv", "Prostata+4", "prostata+4", 
+  "prostate-kbv", "|prostaat|", "prostaat|", "Prostaat|", 
+  "|CTVp1^Prostate_RS|", "CTVp1", "|GTV1_Prostate|", "|GTVp1^Prostate|", 
+  "|Prostate + extraprostatic|", "CTV_P", "CTV_Prostate_marge|", 
+  "|Prostate_Outline|", "GTV_Prostate", "CTVp1_Raw^Prostate", 
+  "CTVp1^Prostate", "CTVp_3625"
+)
+
+# Prostate and SV volumes
+PSV <- c(
+  "CTVpros+vs", "Prostate_inkl syge vesikl", "CTVpros+sv Copy", "Prostate/SV CTV"
+)
+```
+
+
+```{r}
+# Initialize result list for second filter
+result_second <- list()
+
+for (i in seq_len(nrow(second_filter))) {
+  row_data <- second_filter[i, ]
+  patient_id <- row_data[[2]] # Use actual Patient Id column
+  dose <- row_data[[3]]
+  fractions <- row_data[[4]]
+  col_idx <- 5  # Adjusted for column positions
+
+  day <- 0
+  while (col_idx < ncol(row_data)) {
+    rois_raw <- as.character(row_data[[col_idx]])
+    vols_raw <- as.character(row_data[[col_idx + 1]])
+    
+    if (!is.na(rois_raw) && !is.na(vols_raw)) {
+      rois <- unlist(str_split(rois_raw, "\\|"))
+      vols <- unlist(str_split(vols_raw, "\\|"))
+      if (length(rois) == length(vols)) {
+        vols_numeric <- suppressWarnings(as.numeric(vols))
+        df_temp_second <- tibble(ROI = rois, Volume = vols_numeric) %>%
+          filter(tolower(ROI) %in% tolower(second_ROI), !is.na(Volume))
+        if (nrow(df_temp_second) > 0) {
+          selected_second <- df_temp_second %>% slice_min(order_by = Volume, n = 1)
+          result_second[[length(result_second) + 1]] <- tibble(
+            Patient_ID = patient_id,
+            Dose = dose,
+            Fractions = fractions,
+            Day = day,
+            ROI = selected_second$ROI,
+            Volume = selected_second$Volume
+          )
+        }
+      }
+    }
+    day <- day + 1
+    col_idx <- col_idx + 2
+  }
+}
+
+# Create final dataframe for second filter
+final_df_second <- bind_rows(result_second)
+head(final_df_second)
+unique(final_df_second$Patient_ID)
+
+# Count unique patients in second filter
+length(unique(final_df_second$Patient_ID))
+
+```
+
+
+```{r}
+########## recombine filtered results ###########
+
+# Simple combination
+final_df_combined <- bind_rows(final_df, final_df_second)
+
+# Verify results
+cat("Combined dataset has", nrow(final_df_combined), "rows with", 
+    length(unique(final_df_combined$Patient_ID)), "unique patients\n")
+
+
+
+```
+
+```{r}
+# Filter in one step using group filtering
+filtered_df <- final_df_combined %>%
+  group_by(Patient_ID) %>%
+  filter(n() >= 3) %>%
+  ungroup()
+length(unique(filtered_df$Patient_ID))
+
+```
+```{r}
+######## calculate % change if any from first fraction ##########
+
+# Calculate everything in one pipeline with absolute change
+merged_df <- filtered_df %>%
+  group_by(Patient_ID) %>%
+  mutate(
+    baseline_volume = Volume[which.min(Day)],
+    pct_change = ((Volume - baseline_volume) / baseline_volume) * 100,
+    abs_change = Volume - baseline_volume
+  ) %>%
+  ungroup() %>%
+  arrange(Patient_ID, Day)
+
+
+```
+
+```{r}
+
+######### clear some space in environment ########
+# Remove all objects starting with "df"
+rm(list = ls(pattern = "^df"))
+
+# Remove all objects containing "temp"
+rm(list = ls(pattern = "temp"))
+
+# Remove all objects containing "final"
+rm(list = ls(pattern = "final"))
+
+# Remove all objects containing "result"
+rm(list = ls(pattern = "result"))
+
+```
+
+```{r}
+
+#### waterfall plot#########
+
+library(ggplot2)
+library(dplyr)
+
+# Prepare data for waterfall plot
+waterfall_data <- merged_df %>%
+  # Get final measurement for each patient (highest Day)
+  group_by(Patient_ID) %>%
+  slice_max(order_by = Day, n = 1) %>%
+  ungroup() %>%
+  # Sort by percentage change
+  arrange(pct_change) %>%
+  # Add position index
+  mutate(Patient_Index = row_number())
+
+# Create waterfall plot
+waterfall_plot<-ggplot(waterfall_data, aes(x = Patient_Index, y = pct_change)) +
+  geom_col(aes(fill = pct_change > 0), width = 0.7) +
+  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  scale_fill_manual(values = c("TRUE" = "maroon", "FALSE" = "navy"), 
+                    labels = c("Decrease", "Increase"),
+                    name = "Change Direction") +
+  labs(
+    title = "Waterfall Plot: % Volume Change from Baseline by Patient",
+    x = "Patient (Ranked by % Change)",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+
+# Get summary of the waterfall data
+cat("Waterfall Plot Summary:\n")
+cat("Total patients:", nrow(waterfall_data), "\n")
+cat("Patients with volume increase:", sum(waterfall_data$pct_change > 0), "\n")
+cat("Patients with volume decrease:", sum(waterfall_data$pct_change < 0), "\n")
+cat("Range of % change:", round(min(waterfall_data$pct_change), 2), "% to", 
+    round(max(waterfall_data$pct_change), 2), "%\n")
+
+ggsave(
+  filename = "waterfall_plot_pct_change.png",
+  plot = waterfall_plot,
+  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
+  width = 12, 
+  height = 8, 
+  dpi = 300
+)
+```
+
+```{r}
+
+############ spaghetti ################
+
+# Create spaghetti plot
+spaghetti_plot <- ggplot(merged_df, aes(x = Day, y = pct_change, group = Patient_ID)) +
+  geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
+  geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
+  scale_color_viridis_c(guide = "none") +  # Remove legend for 1200 patients
+  labs(
+    title = "Volume Change Trajectories: All 1200 Patients",
+    subtitle = "Black line shows average trend with confidence interval",
+    x = "Treatment Day",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+
+print(spaghetti_plot)
+
+# Save the plot
+ggsave(
+  filename = "spaghetti_plot_pct_change.png",
+  plot = spaghetti_plot,
+  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
+  width = 12, 
+  height = 6, 
+  dpi = 300
+)
+
+
+```
+
+
+```{r}
+### divide group into 5# and 20# or thereabouts ######
+
+# Fix Patient 1162's missing Fractions value
+merged_df_grouped_fixed <- merged_df_grouped %>%
+  mutate(
+    Fractions = case_when(
+      Patient_ID == 1162 ~ 20,           # Set Patient 1162 to 20 fractions
+      TRUE ~ Fractions                   # Keep all other values as they are
+    )
+  )
+
+# Convert to numeric if it's stored as character
+merged_df_grouped <- merged_df %>%
+  mutate(
+    Fractions = as.numeric(Fractions),
+    Fraction_Group = case_when(
+      Fractions > 15 ~ "twenty",
+      Fractions <= 14 ~ "five",
+      TRUE ~ "other"
+    )
+  )
+
+# Find patients in the "other" group
+#other_patients <- merged_df_grouped %>%
+ # filter(Fraction_Group == "other")
+
+# Check if any exist
+#cat("Number of 'other' patients:", nrow(other_patients), "\n")
+#cat("Unique 'other' patients:", length(unique(other_patients$Patient_ID)), "\n")
+
+# Show their fraction values
+#if(nrow(other_patients) > 0) {
+ # cat("Fraction values in 'other' group:\n")
+#  print(table(other_patients$Fractions))
+  
+  # Show first few rows
+ # print(head(other_patients[, c("Patient_ID", "Fractions", "Fraction_Group")]))
+#}
+
+
+```
+```{r}
+
+
+########## now spaghetti for 5 and 20# separately
+
+# Filter for five group
+five_group <- merged_df_grouped %>%
+  filter(Fraction_Group == "five")
+
+# Create spaghetti plot for five group
+spaghetti_plot_five <- ggplot(five_group, aes(x = Day, y = pct_change, group = Patient_ID)) +
+  geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
+  geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
+  scale_color_viridis_c(guide = "none") +
+  labs(
+    title = "Volume Change Trajectories: 5# Group",
+    subtitle = paste("Individual trajectories for", length(unique(five_group$Patient_ID)), "patients - Black line shows average trend"),
+    x = "Treatment Day",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+
+print(spaghetti_plot_five)
+
+
+
+
+```
+```{r}
+# Filter for twenty group
+twenty_group <- merged_df_grouped %>%
+  filter(Fraction_Group == "twenty")
+
+# Create spaghetti plot for twenty group
+spaghetti_plot_twenty <- ggplot(twenty_group, aes(x = Day, y = pct_change, group = Patient_ID)) +
+  geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
+  geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
+  scale_color_viridis_c(guide = "none") +
+  labs(
+    title = "Volume Change Trajectories: 20#)",
+    subtitle = paste("Individual trajectories for", length(unique(twenty_group$Patient_ID)), "patients - Black line shows average trend"),
+    x = "Treatment Day",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+
+print(spaghetti_plot_twenty)
+
+```
+```{r}
+# Save five group plot
+ggsave(
+  filename = "spaghetti_plot_five_group.png",
+  plot = spaghetti_plot_five,
+  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
+  width = 12, 
+  height = 6, 
+  dpi = 300
+)
+
+# Save twenty group plot
+ggsave(
+  filename = "spaghetti_plot_twenty_group.png",
+  plot = spaghetti_plot_twenty,
+  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
+  width = 12, 
+  height = 6, 
+  dpi = 300
+)
+```
+
+```{r}
+### error bar plot ###########
+
+# Calculate mean and SD for each group (excluding "other")
+summary_stats <- merged_df_grouped %>%
+  filter(Fraction_Group != "other") %>%  # Remove "other" patients
+  group_by(Fraction_Group, Day) %>%
+  summarise(
+    mean_change = mean(pct_change, na.rm = TRUE),
+    sd_change = sd(pct_change, na.rm = TRUE),
+    n = n(),
+    se_change = sd_change / sqrt(n),
+    .groups = 'drop'
+  )
+
+# Plot with mean ± SD
+mean_sd_plot <- ggplot(summary_stats, aes(x = Day, y = mean_change, color = Fraction_Group)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = mean_change - sd_change, ymax = mean_change + sd_change), 
+                width = 0.2, alpha = 0.7) +
+  labs(
+    title = "Mean Volume Changes with Standard Deviation",
+    subtitle = "Error bars show ± 1 SD (excluding 'other' patients)",
+    x = "Treatment Day",
+    y = "Mean % Change from Baseline",
+    color = "Fraction Group"
+  ) +
+  theme_minimal()
+
+print(mean_sd_plot)
+
+
+```
+```{r}
+# Filter patients from the five group with treatment days over 14
+five_group_over_14 <- merged_df_grouped %>%
+  filter(Fraction_Group == "five", Day > 14)
+
+# Get unique patients
+unique_patients <- unique(five_group_over_14$Patient_ID)
+
+# Print number of patients and first few patient IDs
+cat("Number of patients in five group with treatment days > 14:", length(unique_patients), "\n")
+cat("Sample patient IDs:", head(unique_patients, 10), "\n")
+
+# Show preview of filtered data
+head(five_group_over_14, 10)
+
+```
+
+```{r}
+
+
+
+
+ ###########Quantile/Percentile Bands
+
+
+
+# Calculate percentile bands
+percentile_data <- merged_df_grouped %>%
+  filter(Fraction_Group != "other") %>%
+  group_by(Fraction_Group, Day) %>%
+  summarise(
+    p10 = quantile(pct_change, 0.1, na.rm = TRUE),
+    p25 = quantile(pct_change, 0.25, na.rm = TRUE),
+    p50 = quantile(pct_change, 0.5, na.rm = TRUE),
+    p75 = quantile(pct_change, 0.75, na.rm = TRUE),
+    p90 = quantile(pct_change, 0.9, na.rm = TRUE),
+    mean_val = mean(pct_change, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+# Percentile band plot
+percentile_plot <- ggplot(percentile_data, aes(x = Day)) +
+  geom_ribbon(aes(ymin = p10, ymax = p90, fill = Fraction_Group), alpha = 0.2) +
+  geom_ribbon(aes(ymin = p25, ymax = p75, fill = Fraction_Group), alpha = 0.4) +
+  geom_line(aes(y = p50, color = Fraction_Group), size = 1.5) +
+  geom_line(aes(y = mean_val, color = Fraction_Group), linetype = "dashed", size = 1) +
+  facet_wrap(~Fraction_Group, scales = "free_x") +
+  labs(
+    title = "Volume Change Percentile Bands Over Time",
+    subtitle = "Dark band: 25th-75th percentile, Light band: 10th-90th percentile\nSolid line: median, Dashed line: mean",
+    x = "Treatment Day",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal()
+
+print(percentile_plot)
+
+
+# Create separate plot for FIVE group
+five_data <- percentile_data %>% filter(Fraction_Group == "five")
+
+five_plot <- ggplot(five_data, aes(x = Day)) +
+  geom_ribbon(aes(ymin = p10, ymax = p90), fill = "steelblue", alpha = 0.2) +
+  geom_ribbon(aes(ymin = p25, ymax = p75), fill = "steelblue", alpha = 0.4) +
+  geom_line(aes(y = p50), color = "steelblue", size = 1.5) +
+  geom_line(aes(y = mean_val), color = "steelblue", linetype = "dashed", size = 1) +
+  labs(
+    title = "Volume Change Percentile Bands: Five # Group",
+    subtitle = "Dark band: 25th-75th percentile, Light band: 10th-90th percentile\nSolid line: median, Dashed line: mean",
+    x = "Treatment Day",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal()
+
+print(five_plot)
+
+# Create separate plot for TWENTY group
+twenty_data <- percentile_data %>% filter(Fraction_Group == "twenty")
+
+twenty_plot <- ggplot(twenty_data, aes(x = Day)) +
+  geom_ribbon(aes(ymin = p10, ymax = p90), fill = "darkred", alpha = 0.2) +
+  geom_ribbon(aes(ymin = p25, ymax = p75), fill = "darkred", alpha = 0.4) +
+  geom_line(aes(y = p50), color = "darkred", size = 1.5) +
+  geom_line(aes(y = mean_val), color = "darkred", linetype = "dashed", size = 1) +
+  labs(
+    title = "Volume Change Percentile Bands: Twenty # Group)",
+    subtitle = "Dark band: 25th-75th percentile, Light band: 10th-90th percentile\nSolid line: median, Dashed line: mean",
+    x = "Treatment Day",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal()
+
+print(twenty_plot)
+
+
+```
+
+
+```{r}
+
+# Create heatmap with patient bins and day bins
+heatmap_binned <- merged_df_grouped %>%
+  filter(Fraction_Group != "other") %>%
+  mutate(
+    Day_Bin = cut(Day, breaks = seq(0, max(Day, na.rm = TRUE), by = 3), include.lowest = TRUE),
+    Patient_Bin = ntile(as.numeric(factor(Patient_ID)), 20)  # 20 patient groups
+  ) %>%
+  group_by(Fraction_Group, Day_Bin, Patient_Bin) %>%
+  summarise(mean_change = mean(pct_change, na.rm = TRUE), .groups = 'drop') %>%
+  ggplot(aes(x = Day_Bin, y = factor(Patient_Bin), fill = mean_change)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  facet_wrap(~Fraction_Group, scales = "free_x") +
+  labs(
+    title = "Heatmap: Average Volume Changes by Patient Groups and Time",
+    x = "Treatment Day Bins",
+    y = "Patient Groups (Quintiles)",
+    fill = "Mean % Change"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(heatmap_binned)
+
+
+
+```
+```{r}
+# Show start vs end points for each patient
+slope_data <- merged_df_grouped %>%
+  filter(Fraction_Group != "other") %>%
+  group_by(Patient_ID, Fraction_Group) %>%
+  summarise(
+    start_change = first(pct_change),
+    end_change = last(pct_change),
+    .groups = 'drop'
+  )
+
+slope_plot <- ggplot(slope_data, aes(x = 1, xend = 2, y = start_change, yend = end_change)) +
+  geom_segment(aes(color = Fraction_Group), alpha = 0.3) +
+  geom_point(aes(x = 1, y = start_change, color = Fraction_Group), alpha = 0.5) +
+  geom_point(aes(x = 2, y = end_change, color = Fraction_Group), alpha = 0.5) +
+  facet_wrap(~Fraction_Group) +
+  scale_x_continuous(breaks = c(1, 2), labels = c("Start", "End")) +
+  labs(
+    title = "Individual Patient Volume Change Trajectories",
+    subtitle = "Start of treatment vs. End of treatment",
+    x = "Treatment Phase",
+    y = "% Change from Baseline"
+  ) +
+  theme_minimal()
+
+print(slope_plot)
+
+```
+```{r}
+
+# Define save path
+save_path <- "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots"
+
+# Save percentile plot (combined version)
+ggsave(
+  filename = "percentile_plot.png", 
+  plot = percentile_plot, 
+  path = save_path, 
+  width = 12, height = 8, dpi = 300
+)
+
+# Save binned heatmap
+ggsave(
+  filename = "binned_heatmap.png", 
+  plot = heatmap_binned, 
+  path = save_path, 
+  width = 12, height = 8, dpi = 300
+)
+
+# Save slope plot
+ggsave(
+  filename = "slope_plot.png", 
+  plot = slope_plot, 
+  path = save_path, 
+  width = 12, height = 8, dpi = 300
+)
+
+# Save separate percentile plots
+# Five group
+ggsave(
+  filename = "percentile_bands_five_group.png", 
+  plot = five_plot, 
+  path = save_path, 
+  width = 12, height = 6, dpi = 300
+)
+
+# Twenty group
+ggsave(
+  filename = "percentile_bands_twenty_group.png", 
+  plot = twenty_plot, 
+  path = save_path, 
+  width = 12, height = 6, dpi = 300
+)
+
+# Save five group spaghetti plot
+ggsave(
+  filename = "spaghetti_plot_five_group.png",
+  plot = spaghetti_plot_five,
+  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
+  width = 12, 
+  height = 6, 
+  dpi = 300
+)
+
+# Save twenty group spaghetti plot
+ggsave(
+  filename = "spaghetti_plot_twenty_group.png",
+  plot = spaghetti_plot_twenty,
+  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
+  width = 12, 
+  height = 6, 
+  dpi = 300
+)
+
+cat("All requested plots saved successfully!\n")
+
+
+```
+
