@@ -295,19 +295,101 @@ cat("Combined dataset has", nrow(final_df_combined), "rows with",
 ```
 
 ```{r}
-# Filter in one step using group filtering
+# Filter in one step using group filtering for those patients with 3 or more fractions
 filtered_df <- final_df_combined %>%
   group_by(Patient_ID) %>%
   filter(n() >= 3) %>%
   ungroup()
 length(unique(filtered_df$Patient_ID))
 
+# Find all duplicated Patient_ID and Day combinations (both directions)
+dup_rows <- filtered_df[
+  duplicated(filtered_df[, c("Patient_ID", "Day")]) |
+  duplicated(filtered_df[, c("Patient_ID", "Day")], fromLast = TRUE),
+  ]
+print(dup_rows)
+
+nodups<- filtered_df[!duplicated(filtered_df[, c("Patient_ID", "Day")]), ]
+
+saveRDS(nodups, file = "cleaned_volume_df.rds")
+
 ```
+
+```{r}
+## quick thought - another way to exclude potential ATP only patients is by removing those with identical volumes between fractions
+
+# Identify patients whose Volume is identical across all Days using iterative logic
+
+identical_patients <- c()
+for(patient in unique(nodups$Patient_ID)) {
+  vols <- nodups$Volume[nodups$Patient_ID == patient & !is.na(nodups$Volume)]
+  if(length(vols) == 0) next
+  first_vol <- vols[1]
+  identical <- TRUE
+  if(length(vols) > 1) {
+    for(v in vols[-1]) {
+      if(abs(v - first_vol) > 1e-8) { # Adjust tolerance as needed for your data
+        identical <- FALSE
+        break
+      }
+    }
+  } else {
+    next  # Only one measurement: not considered identical across fractions
+  }
+  if(identical) {
+    identical_patients <- c(identical_patients, patient)
+  }
+}
+
+# Extract the relevant rows for these patients
+identical_volumes <- nodups[nodups$Patient_ID %in% identical_patients, c("Patient_ID", "Day", "Volume")]
+
+# View result
+print(identical_volumes)
+
+unique_patient_ids <- unique(identical_volumes$Patient_ID)
+
+# Filter the nodups dataframe to these patients and get their Institution
+patients_with_institution <- nodups[nodups$Patient_ID %in% unique_patient_ids, c("Patient_ID", "Dose")]
+
+# Merge Institution info back to the identical_volumes dataframe
+identical_volumes_with_institution <- merge(
+  identical_volumes,
+  patients_with_institution,
+  by = "Patient_ID",
+  all.x = TRUE
+)
+
+# View the result
+print(identical_volumes_with_institution)
+
+# Remove patients with identical volumes from nodups
+nodups_filtered <- nodups[!nodups$Patient_ID %in% identical_patients, ]
+
+# View the filtered dataframe
+print(nodups_filtered)
+
+
+###################### hopefully clean dataset now##############
+
+saveRDS(nodups_filtered, file = "cleaned_volume_df.rds")
+
+# Count the number of unique patients remaining after removal
+length(unique(nodups_filtered$Patient_ID))
+
+## number of ATP patients
+# Count unique patients in the identical_volumes dataframe
+dplyr::n_distinct(identical_volumes$Patient_ID)
+
+
+
+```
+
 ```{r}
 ######## calculate % change if any from first fraction ##########
 
 # Calculate everything in one pipeline with absolute change
-merged_df <- filtered_df %>%
+merged_df <- nodups_filtered %>%
   group_by(Patient_ID) %>%
   mutate(
     baseline_volume = Volume[which.min(Day)],
@@ -425,154 +507,275 @@ ggsave(
 
 
 ```{r}
-### divide group into 5# and 20# or thereabouts ######
+### divide group according to total dose ######
 
-# Fix Patient 1162's missing Fractions value
-merged_df_grouped_fixed <- merged_df_grouped %>%
+library(officer)
+
+merged_df <- merged_df %>%
   mutate(
     Fractions = case_when(
-      Patient_ID == 1162 ~ 20,           # Set Patient 1162 to 20 fractions
-      TRUE ~ Fractions                   # Keep all other values as they are
+      Patient_ID == 1162 ~ "60",      # Quotes: keep as character to match other character data
+      TRUE ~ Fractions
     )
   )
+
+#Rename columns they've got mixed up
+merged_df <- dplyr::rename(merged_df, Total_dose = Fractions)
+merged_df <- dplyr::rename(merged_df, Institution = Dose)
 
 # Convert to numeric if it's stored as character
-merged_df_grouped <- merged_df %>%
-  mutate(
-    Fractions = as.numeric(Fractions),
-    Fraction_Group = case_when(
-      Fractions > 15 ~ "twenty",
-      Fractions <= 14 ~ "five",
-      TRUE ~ "other"
+merged_df <- merged_df |>
+  dplyr::mutate(
+    Total_dose = as.numeric(Total_dose),
+    Day = as.numeric(Day),
+    Volume = as.numeric(Volume),
+    baseline_volume = as.numeric(baseline_volume),
+    pct_change = as.numeric(pct_change),
+    abs_change = as.numeric(abs_change)
+  )
+
+# Cut Total_dose into specified groups
+merged_df <- merged_df |>
+  dplyr::mutate(
+    dose_group = dplyr::case_when(
+      Total_dose >= 24 & Total_dose <= 30 ~ "24-30",
+      Total_dose >= 35 & Total_dose <= 45 ~ "35-45",
+      Total_dose == 50                    ~ "50",
+      Total_dose >= 57 & Total_dose <= 70 ~ "57-70",
+      TRUE                                ~ "other"
     )
   )
 
-# Find patients in the "other" group
-#other_patients <- merged_df_grouped %>%
- # filter(Fraction_Group == "other")
+# Create subset dataframes for each group
+merged_24_30    <- dplyr::filter(merged_df, dose_group == "24-30")
+merged_35_45    <- dplyr::filter(merged_df, dose_group == "35-45")
+merged_50       <- dplyr::filter(merged_df, dose_group == "50")
+merged_57_70    <- dplyr::filter(merged_df, dose_group == "57-70")
+merged_others   <- dplyr::filter(merged_df, dose_group == "other")
 
-# Check if any exist
-#cat("Number of 'other' patients:", nrow(other_patients), "\n")
-#cat("Unique 'other' patients:", length(unique(other_patients$Patient_ID)), "\n")
+# Summarise with formatting to one decimal place
+summary_stats <- merged_df |>
+  dplyr::group_by(dose_group) |>
+  dplyr::summarise(
+    Median = round(stats::median(Volume, na.rm = TRUE), 1),
+    Q1 = round(stats::quantile(Volume, 0.25, na.rm = TRUE), 1),
+    Q3 = round(stats::quantile(Volume, 0.75, na.rm = TRUE), 1),
+    `N Patients` = dplyr::n_distinct(Patient_ID),
+    `Missing Volume` = sum(is.na(Volume))
+  )
 
-# Show their fraction values
-#if(nrow(other_patients) > 0) {
- # cat("Fraction values in 'other' group:\n")
-#  print(table(other_patients$Fractions))
-  
-  # Show first few rows
- # print(head(other_patients[, c("Patient_ID", "Fractions", "Fraction_Group")]))
-#}
+# Create a flextable
+summary_table <- flextable::flextable(summary_stats)
+summary_table <- flextable::set_caption(summary_table, "Summary Statistics by Dose Group")
+summary_table <- flextable::autofit(summary_table)
+
+# Export to Word document
+doc <- officer::read_docx()
+doc <- body_add_flextable(doc, summary_table)
+print(doc, target = "Dose_Groups_Summary_Table.docx")
+```
+
+```{r}
+
+#### median prostate volume at baseline for both main groups ####
+
+
+# For merged_35_45: subset to first entry (lowest Day) per patient
+merged_35_45_first <- merged_35_45 %>%
+  dplyr::group_by(Patient_ID) %>%
+  dplyr::slice_min(Day, n = 1, with_ties = FALSE) %>%
+  dplyr::ungroup()
+
+# For merged_57_70: subset to first entry (lowest Day) per patient
+merged_57_70_first <- merged_57_70 %>%
+  dplyr::group_by(Patient_ID) %>%
+  dplyr::slice_min(Day, n = 1, with_ties = FALSE) %>%
+  dplyr::ungroup()
+
+# Summary statistics for baseline_volume in merged_35_45_first
+df_35_45_summary <- merged_35_45_first %>%
+  dplyr::summarise(
+    median_baseline_volume = stats::median(baseline_volume, na.rm = TRUE),
+    Q1_baseline_volume = stats::quantile(baseline_volume, 0.25, na.rm = TRUE),
+    Q3_baseline_volume = stats::quantile(baseline_volume, 0.75, na.rm = TRUE)
+  )
+
+# Summary statistics for baseline_volume in merged_57_70_first
+df_57_70_summary <- merged_57_70_first %>%
+  dplyr::summarise(
+    median_baseline_volume = stats::median(baseline_volume, na.rm = TRUE),
+    Q1_baseline_volume = stats::quantile(baseline_volume, 0.25, na.rm = TRUE),
+    Q3_baseline_volume = stats::quantile(baseline_volume, 0.75, na.rm = TRUE)
+  )
+# Print baseline volume summary for 35-45 group
+print(df_35_45_summary)
+
+# Print baseline volume summary for 57-70 group
+print(df_57_70_summary)
 
 
 ```
 ```{r}
+# For merged_57_70: get each patient's last fraction (highest Day)
+merged_57_70_last <- merged_57_70 %>%
+  dplyr::group_by(Patient_ID) %>%
+  dplyr::filter(Day == max(Day, na.rm = TRUE)) %>%
+  dplyr::ungroup()
+
+# Summarise Volume at last fraction for each group
+df_35_45_last_summary <- merged_35_45_last %>%
+  dplyr::summarise(
+    median_Volume = round(stats::median(Volume, na.rm = TRUE), 1),
+    Q1_Volume = round(stats::quantile(Volume, 0.25, na.rm = TRUE), 1),
+    Q3_Volume = round(stats::quantile(Volume, 0.75, na.rm = TRUE), 1)
+  )
+
+df_57_70_last_summary <- merged_57_70_last %>%
+  dplyr::summarise(
+    median_Volume = round(stats::median(Volume, na.rm = TRUE), 1),
+    Q1_Volume = round(stats::quantile(Volume, 0.25, na.rm = TRUE), 1),
+    Q3_Volume = round(stats::quantile(Volume, 0.75, na.rm = TRUE), 1)
+  )
+
+# View summaries
+print(df_35_45_last_summary)
+print(df_57_70_last_summary)
 
 
+
+```
+
+
+
+```{r}
+# Count unique patients in merged_35_45 with any Day > 15
+patients_beyond_15 <- merged_35_45 %>%
+  dplyr::filter(Day > 15) %>%
+  dplyr::summarise(n_patients = dplyr::n_distinct(Patient_ID))
+
+print(patients_beyond_15)
+
+```
+
+```{r}
 ########## now spaghetti for 5 and 20# separately
 
-# Filter for five group
-five_group <- merged_df_grouped %>%
-  filter(Fraction_Group == "five")
 
-# Create spaghetti plot for five group
-spaghetti_plot_five <- ggplot(five_group, aes(x = Day, y = pct_change, group = Patient_ID)) +
-  geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
-  geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
-  scale_color_viridis_c(guide = "none") +
-  labs(
-    title = "Volume Change Trajectories: 5# Group",
-    subtitle = paste("Individual trajectories for", length(unique(five_group$Patient_ID)), "patients - Black line shows average trend"),
-    x = "Treatment Day",
+# Filter to only include data up to Day 15
+filtered_35_45 <- dplyr::filter(merged_35_45, Day <= 15)
+
+# Create spaghetti plot for 35-45 group, Days 1-15 only
+spaghetti_plot_35_45 <- ggplot2::ggplot(filtered_35_45, aes(x = Day, y = pct_change, group = Patient_ID)) +
+  ggplot2::geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
+  ggplot2::geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
+  ggplot2::scale_color_viridis_c(guide = "none") +
+  ggplot2::labs(
+    title = "Volume Change Trajectories: 35-45 Group (Days 1-15)",
+    subtitle = paste(
+      "Individual trajectories for",
+      length(unique(filtered_35_45$Patient_ID)),
+      "patients - Black line shows average trend (LOESS)"
+    ),
+    x = "Fraction",
     y = "% Change from Baseline"
   ) +
-  theme_minimal() +
-  theme(panel.grid.minor = element_blank())
+  ggplot2::theme_minimal() +
+  ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
 
-print(spaghetti_plot_five)
+print(spaghetti_plot_35_45)
 
-
+# For ggplot2 plots:
+ggplot2::ggsave("spaghetti_plot_35_45.png", spaghetti_plot_35_45, width = 8, height = 5)
 
 
 ```
-```{r}
-# Filter for twenty group
-twenty_group <- merged_df_grouped %>%
-  filter(Fraction_Group == "twenty")
 
-# Create spaghetti plot for twenty group
-spaghetti_plot_twenty <- ggplot(twenty_group, aes(x = Day, y = pct_change, group = Patient_ID)) +
-  geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
-  geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
-  scale_color_viridis_c(guide = "none") +
-  labs(
-    title = "Volume Change Trajectories: 20#)",
-    subtitle = paste("Individual trajectories for", length(unique(twenty_group$Patient_ID)), "patients - Black line shows average trend"),
-    x = "Treatment Day",
+
+```{r}
+```
+```{r}
+# Create spaghetti plot for 57-70 group using all available Days
+spaghetti_plot_57_70 <- ggplot2::ggplot(merged_57_70, aes(x = Day, y = pct_change, group = Patient_ID)) +
+  ggplot2::geom_line(aes(color = Patient_ID), alpha = 0.3, size = 0.3) +
+  ggplot2::geom_smooth(aes(group = 1), method = "loess", color = "black", size = 2, se = TRUE) +
+  ggplot2::scale_color_viridis_c(guide = "none") +
+  ggplot2::labs(
+    title = "Volume Change Trajectories: 57-70 Group",
+    subtitle = paste(
+      "Individual trajectories for",
+      length(unique(merged_57_70$Patient_ID)),
+      "patients - Black line shows average trend (LOESS)"
+    ),
+    x = "Fraction",
     y = "% Change from Baseline"
   ) +
-  theme_minimal() +
-  theme(panel.grid.minor = element_blank())
+  ggplot2::theme_minimal() +
+  ggplot2::theme(panel.grid.minor = ggplot2::element_blank())
 
-print(spaghetti_plot_twenty)
+print(spaghetti_plot_57_70)
+
+# Save the plot to your working directory
+ggplot2::ggsave("spaghetti_plot_57_70.png", spaghetti_plot_57_70, width = 8, height = 5)
+
 
 ```
-```{r}
-# Save five group plot
-ggsave(
-  filename = "spaghetti_plot_five_group.png",
-  plot = spaghetti_plot_five,
-  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
-  width = 12, 
-  height = 6, 
-  dpi = 300
-)
 
-# Save twenty group plot
-ggsave(
-  filename = "spaghetti_plot_twenty_group.png",
-  plot = spaghetti_plot_twenty,
-  path = "C:/Sian Hard drive/RMH/Chapter 1 volume changes MOM/Plots",
-  width = 12, 
-  height = 6, 
-  dpi = 300
-)
+
+```{r}
+
+
 ```
 
 ```{r}
-### error bar plot ###########
+# Truncate 35-45 group to fractions (days) up to 15
+filtered_35_45 <- dplyr::filter(merged_35_45, Day <= 15)
 
-# Calculate mean and SD for each group (excluding "other")
-summary_stats <- merged_df_grouped %>%
-  filter(Fraction_Group != "other") %>%  # Remove "other" patients
-  group_by(Fraction_Group, Day) %>%
-  summarise(
+# Keep all of 57-70 group as is
+filtered_57_70 <- merged_57_70
+
+# Combine both groups, label them for summary stats
+combined_stats_truncated <- dplyr::bind_rows(
+  filtered_35_45 %>% dplyr::mutate(Group_Label = "35-45"),
+  filtered_57_70 %>% dplyr::mutate(Group_Label = "57-70")
+) %>%
+  dplyr::group_by(Group_Label, Day) %>%
+  dplyr::summarise(
     mean_change = mean(pct_change, na.rm = TRUE),
     sd_change = sd(pct_change, na.rm = TRUE),
-    n = n(),
+    n = dplyr::n(),
     se_change = sd_change / sqrt(n),
     .groups = 'drop'
   )
 
-# Plot with mean ± SD
-mean_sd_plot <- ggplot(summary_stats, aes(x = Day, y = mean_change, color = Fraction_Group)) +
-  geom_line(size = 1) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = mean_change - sd_change, ymax = mean_change + sd_change), 
-                width = 0.2, alpha = 0.7) +
-  labs(
-    title = "Mean Volume Changes with Standard Deviation",
-    subtitle = "Error bars show ± 1 SD (excluding 'other' patients)",
-    x = "Treatment Day",
-    y = "Mean % Change from Baseline",
-    color = "Fraction Group"
+# Plot mean ± SD for both groups (dodged error bars for clarity)
+mean_sd_plot_truncated <- ggplot2::ggplot(
+  combined_stats_truncated,
+  ggplot2::aes(x = Day, y = mean_change, color = Group_Label, group = Group_Label)
+) +
+  ggplot2::geom_line(size = 1, position = ggplot2::position_dodge(width = 0.4)) +
+  ggplot2::geom_point(size = 2, position = ggplot2::position_dodge(width = 0.4)) +
+  ggplot2::geom_errorbar(
+    ggplot2::aes(ymin = mean_change - sd_change, ymax = mean_change + sd_change),
+    width = 0.2,
+    alpha = 0.8,
+    position = ggplot2::position_dodge(width = 0.4)
   ) +
-  theme_minimal()
+  ggplot2::labs(
+    title = "Mean Percentage Volume Change from Baseline with Standard Deviation",
+    subtitle = "35-45 Group: Days 1–15 only shown",
+    x = "Fraction",
+    y = "Mean % Change from Baseline",
+    color = "Fractionation Group"
+  ) +
+  ggplot2::theme_minimal()
 
-print(mean_sd_plot)
+print(mean_sd_plot_truncated)
+
+ggplot2::ggsave("mean_sd_plot_truncated.png", mean_sd_plot_truncated, width = 8, height = 5)
 
 
 ```
+
 ```{r}
 # Filter patients from the five group with treatment days over 14
 five_group_over_14 <- merged_df_grouped %>%
